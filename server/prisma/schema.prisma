@@ -1,0 +1,67 @@
+// Prisma schema — single source of truth for the data model.
+// The provider line is swapped per environment by scripts/prisma-provider.sh
+// (sqlite for zero-install dev, postgresql for CI test and prod). See
+// docs/specs/technical/01-architecture.md §5 (decision D-4).
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+model User {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  passwordHash String
+  displayName  String
+  // "GM" | "PLAYER" — validated in the app layer (Zod), not by the DB,
+  // to keep the schema portable across SQLite/PostgreSQL.
+  role         String
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  ownedCampaigns Campaign[]
+  memberships    CampaignMember[]
+  createdInvites CampaignInvite[]
+}
+
+model Campaign {
+  id          String   @id @default(cuid())
+  name        String
+  description String   @default("")
+  system      String   @default("generic")
+  archived    Boolean  @default(false)
+  ownerId     String
+  owner       User     @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  members CampaignMember[]
+  invites CampaignInvite[]
+}
+
+model CampaignMember {
+  id         String   @id @default(cuid())
+  campaignId String
+  campaign   Campaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  userId     String
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  joinedAt   DateTime @default(now())
+
+  @@unique([campaignId, userId])
+}
+
+model CampaignInvite {
+  id          String    @id @default(cuid())
+  campaignId  String
+  campaign    Campaign  @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  createdById String
+  createdBy   User      @relation(fields: [createdById], references: [id], onDelete: Cascade)
+  token       String    @unique
+  expiresAt   DateTime
+  usedAt      DateTime?
+  createdAt   DateTime  @default(now())
+}

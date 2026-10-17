@@ -1,0 +1,28 @@
+{
+  "name": "rpg-virtual-tabletop",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Web-based virtual tabletop for tabletop RPG sessions",
+  "workspaces": [
+    "server",
+    "client"
+  ],
+  "scripts": {
+    "dev": "concurrently -k -n server,client \"npm run dev:server\" \"npm run dev:client\"",
+    "dev:server": "npm --workspace server run dev",
+    "dev:client": "npm --workspace client run dev",
+    "build": "npm --workspace server run build && npm --workspace client run build",
+    "start": "npm --workspace server run start",
+    "db:push": "npm --workspace server run db:push",
+    "db:seed": "npm --workspace server run db:seed",
+    "test": "npm --workspace server run test",
+    "test:e2e": "bash scripts/run-e2e.sh",
+    "typecheck": "npm --workspace server run typecheck && npm --workspace client run typecheck"
+  },
+  "devDependencies": {
+    "concurrently": "^9.1.0"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}

@@ -1,0 +1,35 @@
+import cookieParser from "cookie-parser";
+import express from "express";
+import { existsSync } from "node:fs";
+import path from "node:path";
+import { config } from "./config.js";
+import { apiNotFound, errorHandler } from "./middleware/errors.js";
+import { authRouter } from "./modules/auth/routes.js";
+import { campaignsRouter } from "./modules/campaigns/routes.js";
+
+export function createApp(): express.Express {
+  const app = express();
+  app.use(express.json());
+  app.use(cookieParser());
+
+  app.get("/api/health", (_req, res) => {
+    res.json({ status: "ok" });
+  });
+  app.use("/api/auth", authRouter);
+  app.use("/api/campaigns", campaignsRouter);
+  app.use("/api", apiNotFound);
+
+  // In production (and E2E) the server serves the built client; in dev the
+  // Vite dev server proxies /api here instead and this block is skipped.
+  if (existsSync(config.clientDist)) {
+    app.use(express.static(config.clientDist));
+    app.get("*", (_req, res) => {
+      res.sendFile(path.join(config.clientDist, "index.html"));
+    });
+  }
+
+  app.use(errorHandler);
+  return app;
+}
+
+export const app = createApp();

@@ -1,0 +1,30 @@
+# Dependencies
+node_modules/
+
+# Builds
+dist/
+client/dist/
+
+# Local databases (SQLite)
+*.db
+*.db-journal
+
+# Environment files
+.env
+server/.env
+
+# Python (Robot Framework)
+.venv/
+__pycache__/
+*.pyc
+
+# Robot Framework output
+e2e/output/
+
+# Playwright / Browser library
+playwright-log.txt
+browser/
+
+# OS / editor noise
+.DS_Store
+*.log

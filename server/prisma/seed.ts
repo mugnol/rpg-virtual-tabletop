@@ -1,0 +1,34 @@
+import { PrismaClient } from "@prisma/client";
+import bcrypt from "bcryptjs";
+
+const prisma = new PrismaClient();
+
+async function main() {
+  const passwordHash = await bcrypt.hash("password123", 10);
+
+  const gm = await prisma.user.upsert({
+    where: { email: "gm@example.com" },
+    update: {},
+    create: { email: "gm@example.com", passwordHash, displayName: "Demo GM", role: "GM" },
+  });
+  await prisma.user.upsert({
+    where: { email: "player@example.com" },
+    update: {},
+    create: { email: "player@example.com", passwordHash, displayName: "Demo Player", role: "PLAYER" },
+  });
+
+  const existing = await prisma.campaign.findFirst({ where: { ownerId: gm.id } });
+  if (!existing) {
+    await prisma.campaign.create({
+      data: {
+        name: "Demo Campaign",
+        description: "Created by npm run db:seed — safe to delete.",
+        system: "D&D 5e",
+        ownerId: gm.id,
+      },
+    });
+  }
+  console.log("[seed] Demo users gm@example.com / player@example.com (password: password123)");
+}
+
+main().finally(() => prisma.$disconnect());
