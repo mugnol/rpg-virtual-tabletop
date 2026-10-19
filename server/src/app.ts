@@ -10,6 +10,8 @@ import { mapsRouter, tokensRouter } from "./modules/maps/routes.js";
 import { sessionsRouter } from "./modules/sessions/routes.js";
 import { sheetsRouter } from "./modules/sheets/routes.js";
 import { systemsRouter } from "./modules/systems/routes.js";
+import { themesRouter } from "./modules/themes/routes.js";
+import { usersRouter } from "./modules/users/routes.js";
 
 export function createApp(): express.Express {
   const app = express();
@@ -20,6 +22,8 @@ export function createApp(): express.Express {
     res.json({ status: "ok" });
   });
   app.use("/api/auth", authRouter);
+  app.use("/api/users", usersRouter);
+  app.use("/api/themes", themesRouter);
   app.use("/api/campaigns", campaignsRouter);
   app.use("/api/systems", systemsRouter);
   app.use("/api/sheets", sheetsRouter);

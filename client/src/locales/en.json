@@ -1,0 +1,41 @@
+{
+  "nav": {
+    "brand": "RPG Virtual Tabletop",
+    "dashboard": "Dashboard",
+    "systems": "Systems",
+    "themes": "Themes",
+    "logout": "Logout",
+    "login": "Login",
+    "register": "Register",
+    "themeSelect": "Theme",
+    "languageSelect": "Language"
+  },
+  "dashboard": {
+    "title": "Campaigns",
+    "createCampaign": "Create Campaign",
+    "joinCampaign": "Join Campaign",
+    "joinPrompt": "Have an invite code? Paste it below to join a campaign as a player.",
+    "joinButton": "Join Campaign",
+    "noCampaigns": "No campaigns found. Create one or join an existing game with an invite code!",
+    "statusActive": "Active",
+    "statusArchived": "Archived"
+  },
+  "themes": {
+    "title": "Visual Themes",
+    "description": "Switch visual themes, export definitions, or import custom theme JSON configurations.",
+    "export": "Export",
+    "import": "Import Theme",
+    "importTitle": "Import Custom Theme",
+    "importPlaceholder": "Paste theme JSON here...",
+    "builtinBadge": "Built-in",
+    "customBadge": "Custom",
+    "importButton": "Import Theme"
+  },
+  "common": {
+    "save": "Save",
+    "cancel": "Cancel",
+    "delete": "Delete",
+    "loading": "Loading...",
+    "error": "Error"
+  }
+}

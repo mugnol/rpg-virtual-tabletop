@@ -3,6 +3,8 @@ export interface User {
   email: string;
   displayName: string;
   role: "GM" | "PLAYER";
+  preferredTheme?: string;
+  preferredLocale?: string;
 }
 
 export interface CampaignListItem {
@@ -524,5 +526,61 @@ export function executeCombatAttack(
 export function endCombat(mapId: string): Promise<{ combat: CombatState }> {
   return request("POST", `/maps/${mapId}/combat/end`);
 }
+
+export interface ThemeColors {
+  bgPrimary: string;
+  bgSecondary: string;
+  bgPanel: string;
+  textPrimary: string;
+  textSecondary: string;
+  accent: string;
+  accentHover: string;
+  border: string;
+  danger: string;
+}
+
+export interface ThemeTypography {
+  fontFamilySans: string;
+  fontFamilyHeading: string;
+  fontFamilyMono: string;
+}
+
+export interface ThemeConfig {
+  key: string;
+  name: string;
+  description?: string;
+  builtin?: boolean;
+  colors: ThemeColors;
+  typography: ThemeTypography;
+  borderRadius: string;
+  customProperties?: Record<string, string>;
+}
+
+export interface ThemeSummary {
+  key: string;
+  name: string;
+  description: string;
+  builtin: boolean;
+}
+
+export function listThemes(): Promise<{ themes: ThemeSummary[] }> {
+  return request("GET", "/themes");
+}
+
+export function getTheme(key: string): Promise<{ theme: ThemeConfig }> {
+  return request("GET", `/themes/${key}`);
+}
+
+export function importTheme(body: unknown): Promise<{ theme: ThemeConfig }> {
+  return request("POST", "/themes/import", body);
+}
+
+export function updateUserPreferences(preferences: {
+  preferredTheme?: string;
+  preferredLocale?: string;
+}): Promise<{ preferences: { preferredTheme: string; preferredLocale: string } }> {
+  return request("PATCH", "/users/me/preferences", preferences);
+}
+
 
 

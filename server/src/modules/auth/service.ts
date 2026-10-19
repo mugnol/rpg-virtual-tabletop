@@ -11,6 +11,8 @@ export function toPublicUser(user: User) {
     email: user.email,
     displayName: user.displayName,
     role: user.role,
+    preferredTheme: user.preferredTheme,
+    preferredLocale: user.preferredLocale,
   };
 }
 

@@ -9,10 +9,12 @@ import {
   type SystemSummary,
 } from "../api/client";
 import { useAuth } from "../auth/AuthContext";
+import { useI18n } from "../i18n/I18nContext";
 import { FormError } from "../components/FormError";
 
 export function DashboardPage() {
   const { user } = useAuth();
+  const { t } = useI18n();
   const navigate = useNavigate();
   const [campaigns, setCampaigns] = useState<CampaignListItem[] | null>(null);
   const [listError, setListError] = useState<string | null>(null);
@@ -70,6 +72,7 @@ export function DashboardPage() {
 }
 
 function CreateCampaignPanel({ onCreated }: { onCreated: (id: string) => void }) {
+  const { t } = useI18n();
   const [open, setOpen] = useState(false);
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
@@ -125,7 +128,7 @@ function CreateCampaignPanel({ onCreated }: { onCreated: (id: string) => void })
         className="btn btn-primary"
         onClick={() => setOpen((v) => !v)}
       >
-        New campaign
+        {t("dashboard.createCampaign")}
       </button>
       {open && (
         <form data-testid="campaign-create-form" className="card form" onSubmit={onSubmit}>

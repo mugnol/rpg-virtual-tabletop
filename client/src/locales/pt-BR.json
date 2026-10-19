@@ -1,0 +1,41 @@
+{
+  "nav": {
+    "brand": "RPG Virtual Tabletop",
+    "dashboard": "Painel",
+    "systems": "Sistemas",
+    "themes": "Temas",
+    "logout": "Sair",
+    "login": "Entrar",
+    "register": "Cadastrar",
+    "themeSelect": "Tema",
+    "languageSelect": "Idioma"
+  },
+  "dashboard": {
+    "title": "Campanhas",
+    "createCampaign": "Criar Campanha",
+    "joinCampaign": "Entrar em Campanha",
+    "joinPrompt": "Tem um código de convite? Cole-o abaixo para entrar na campanha como jogador.",
+    "joinButton": "Entrar na Campanha",
+    "noCampaigns": "Nenhuma campanha encontrada. Crie uma ou use um código de convite!",
+    "statusActive": "Ativa",
+    "statusArchived": "Arquivada"
+  },
+  "themes": {
+    "title": "Temas Visuais",
+    "description": "Alterne temas visuais, exporte definições ou importe configurações customizadas em JSON.",
+    "export": "Exportar",
+    "import": "Importar Tema",
+    "importTitle": "Importar Tema Customizado",
+    "importPlaceholder": "Cole o JSON do tema aqui...",
+    "builtinBadge": "Integrado",
+    "customBadge": "Customizado",
+    "importButton": "Importar Tema"
+  },
+  "common": {
+    "save": "Salvar",
+    "cancel": "Cancelar",
+    "delete": "Excluir",
+    "loading": "Carregando...",
+    "error": "Erro"
+  }
+}

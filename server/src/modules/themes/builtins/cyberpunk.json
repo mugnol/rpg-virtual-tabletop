@@ -1,0 +1,25 @@
+{
+  "key": "cyberpunk",
+  "name": "Cyberpunk",
+  "description": "High-contrast dark synth aesthetic with neon cyan and magenta accents",
+  "colors": {
+    "bgPrimary": "#050811",
+    "bgSecondary": "#0c1322",
+    "bgPanel": "#131b2e",
+    "textPrimary": "#e2f1ff",
+    "textSecondary": "#7ea3cc",
+    "accent": "#00f0ff",
+    "accentHover": "#3df3ff",
+    "border": "#1f2f4d",
+    "danger": "#ff0055"
+  },
+  "typography": {
+    "fontFamilySans": "'Rajdhani', -apple-system, sans-serif",
+    "fontFamilyHeading": "'Orbitron', sans-serif",
+    "fontFamilyMono": "'Share Tech Mono', monospace"
+  },
+  "borderRadius": "2px",
+  "customProperties": {
+    "glow": "0 0 12px rgba(0, 240, 255, 0.4)"
+  }
+}
