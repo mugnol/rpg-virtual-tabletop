@@ -1,9 +1,8 @@
 import { describe, expect, it } from "vitest";
-import type { SuperAgentTest } from "supertest";
-import { guest, registerAgent } from "../helpers.js";
+import { guest, registerAgent, type ApiAgent } from "../helpers.js";
 
 async function createCampaign(
-  gm: SuperAgentTest,
+  gm: ApiAgent,
   payload: Record<string, unknown> = { name: "Test Campaign" },
 ) {
   const res = await gm.post("/api/campaigns").send(payload);
@@ -129,14 +128,14 @@ describe("editing and archiving campaigns", () => {
     const patched = await gm.patch(`/api/campaigns/${campaign.id}`).send({
       name: "After Edit",
       description: "New description",
-      system: "D&D 5e",
+      system: "dnd5e-2024",
       archived: true,
     });
     expect(patched.status).toBe(200);
     expect(patched.body.campaign).toMatchObject({
       name: "After Edit",
       description: "New description",
-      system: "D&D 5e",
+      system: "dnd5e-2024",
       archived: true,
     });
 

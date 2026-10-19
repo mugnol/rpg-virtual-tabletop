@@ -1,6 +1,7 @@
 import { Router } from "express";
 import { asyncHandler, parseBody } from "../../lib/http.js";
 import { requireAuth, requireRole } from "../../middleware/auth.js";
+import { campaignSheetsRouter } from "../sheets/routes.js";
 import {
   campaignCreateSchema,
   campaignUpdateSchema,
@@ -74,3 +75,5 @@ campaignsRouter.post(
     res.status(201).json({ invite: await createInvite(req.user!.id, req.params.id) });
   }),
 );
+
+campaignsRouter.use("/:id/sheets", campaignSheetsRouter);

@@ -4,6 +4,8 @@ import { CampaignDetailPage } from "./pages/CampaignDetailPage";
 import { DashboardPage } from "./pages/DashboardPage";
 import { LoginPage } from "./pages/LoginPage";
 import { RegisterPage } from "./pages/RegisterPage";
+import { SheetPage } from "./pages/SheetPage";
+import { SystemsPage } from "./pages/SystemsPage";
 
 export function App() {
   return (
@@ -33,10 +35,26 @@ export function App() {
         }
       />
       <Route
+        path="/systems"
+        element={
+          <RequireAuth>
+            <SystemsPage />
+          </RequireAuth>
+        }
+      />
+      <Route
         path="/campaigns/:id"
         element={
           <RequireAuth>
             <CampaignDetailPage />
+          </RequireAuth>
+        }
+      />
+      <Route
+        path="/sheets/:id"
+        element={
+          <RequireAuth>
+            <SheetPage />
           </RequireAuth>
         }
       />

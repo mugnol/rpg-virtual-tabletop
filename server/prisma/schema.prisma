@@ -26,6 +26,7 @@ model User {
   ownedCampaigns Campaign[]
   memberships    CampaignMember[]
   createdInvites CampaignInvite[]
+  sheets         CharacterSheet[]
 }
 
 model Campaign {
@@ -41,6 +42,7 @@ model Campaign {
 
   members CampaignMember[]
   invites CampaignInvite[]
+  sheets  CharacterSheet[]
 }
 
 model CampaignMember {
@@ -64,4 +66,40 @@ model CampaignInvite {
   expiresAt   DateTime
   usedAt      DateTime?
   createdAt   DateTime  @default(now())
+}
+
+model SystemConfig {
+  key         String
+  version     String
+  name        String
+  attribution String
+  builtin     Boolean  @default(false)
+  config      String
+  createdAt   DateTime @default(now())
+
+  @@id([key, version])
+}
+
+model CharacterSheet {
+  id           String   @id @default(cuid())
+  campaignId   String
+  campaign     Campaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  kind         String
+  name         String
+  ownerId      String?
+  owner        User?    @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  systemKey    String
+  ancestryId   String?
+  classId      String?
+  backgroundId String?
+  level        Int      @default(1)
+  xp           Int      @default(0)
+  abilities    String   @default("{}")
+  hpMax        Int      @default(1)
+  hpCurrent    Int      @default(1)
+  armorId      String?
+  shield       Boolean  @default(false)
+  extras       String   @default("{}")
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
 }

@@ -1,9 +1,12 @@
 import { PrismaClient } from "@prisma/client";
 import bcrypt from "bcryptjs";
+import { seedBuiltinSystems } from "../src/rules/builtin.js";
 
 const prisma = new PrismaClient();
 
 async function main() {
+  await seedBuiltinSystems(prisma);
+
   const passwordHash = await bcrypt.hash("password123", 10);
 
   const gm = await prisma.user.upsert({
@@ -23,12 +26,12 @@ async function main() {
       data: {
         name: "Demo Campaign",
         description: "Created by npm run db:seed — safe to delete.",
-        system: "D&D 5e",
+        system: "shadowdark",
         ownerId: gm.id,
       },
     });
   }
-  console.log("[seed] Demo users gm@example.com / player@example.com (password: password123)");
+  console.log("[seed] Built-in systems + demo users gm@example.com / player@example.com (password: password123)");
 }
 
 main().finally(() => prisma.$disconnect());

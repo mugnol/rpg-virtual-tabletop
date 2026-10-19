@@ -1,0 +1,96 @@
+{
+  "key": "shadowdark",
+  "name": "Shadowdark RPG",
+  "version": "1.0.0",
+  "attribution": "Shadowdark RPG content is used as game mechanics under the Shadowdark RPG Third-Party License. This app is an independent product published under the Shadowdark RPG Third-Party License and is not affiliated with The Arcane Library, LLC. Shadowdark RPG © 2023 The Arcane Library, LLC.",
+  "abilities": [
+    { "key": "str", "name": "Strength", "abbreviation": "STR" },
+    { "key": "int", "name": "Intelligence", "abbreviation": "INT" },
+    { "key": "dex", "name": "Dexterity", "abbreviation": "DEX" },
+    { "key": "wis", "name": "Wisdom", "abbreviation": "WIS" },
+    { "key": "con", "name": "Constitution", "abbreviation": "CON" },
+    { "key": "cha", "name": "Charisma", "abbreviation": "CHA" }
+  ],
+  "abilityScoreRange": { "min": 3, "max": 18 },
+  "abilityModifier": {
+    "formula": "floor((score - 10) / 2)",
+    "min": -4,
+    "max": 4
+  },
+  "creation": {
+    "methods": ["roll3d6InOrder", "manual"],
+    "mulliganIfAllBelow": 14
+  },
+  "levels": {
+    "max": 10,
+    "advancement": { "mode": "multiplier", "xpMultiplier": 10, "resetOnAdvance": true }
+  },
+  "classes": [
+    { "key": "fighter", "name": "Fighter", "hitDie": 8 },
+    {
+      "key": "priest",
+      "name": "Priest",
+      "hitDie": 6,
+      "spellcasting": {
+        "ability": "wis",
+        "knownByLevel": [2, 3, 4, 5, 6, 7, 8, 9, 10, 10]
+      }
+    },
+    { "key": "thief", "name": "Thief", "hitDie": 4 },
+    {
+      "key": "wizard",
+      "name": "Wizard",
+      "hitDie": 4,
+      "spellcasting": {
+        "ability": "int",
+        "knownByLevel": [3, 4, 5, 6, 7, 8, 9, 10, 11, 12]
+      }
+    }
+  ],
+  "ancestries": [
+    { "key": "human", "name": "Human" },
+    { "key": "elf", "name": "Elf" },
+    { "key": "dwarf", "name": "Dwarf" },
+    { "key": "halfling", "name": "Halfling" },
+    { "key": "half-orc", "name": "Half-Orc" },
+    { "key": "goblin", "name": "Goblin" }
+  ],
+  "backgrounds": [
+    { "key": "urchin", "name": "Urchin" },
+    { "key": "wanted", "name": "Wanted" },
+    { "key": "cult-initiate", "name": "Cult Initiate" },
+    { "key": "thieves-guild", "name": "Thieves' Guild" },
+    { "key": "banished", "name": "Banished" },
+    { "key": "orphaned", "name": "Orphaned" },
+    { "key": "wizards-apprentice", "name": "Wizard's Apprentice" },
+    { "key": "jeweler", "name": "Jeweler" },
+    { "key": "herbalist", "name": "Herbalist" },
+    { "key": "barbarian", "name": "Barbarian" },
+    { "key": "mercenary", "name": "Mercenary" },
+    { "key": "sailor", "name": "Sailor" },
+    { "key": "acolyte", "name": "Acolyte" },
+    { "key": "soldier", "name": "Soldier" },
+    { "key": "ranger", "name": "Ranger" },
+    { "key": "scout", "name": "Scout" },
+    { "key": "minstrel", "name": "Minstrel" },
+    { "key": "scholar", "name": "Scholar" },
+    { "key": "noble", "name": "Noble" },
+    { "key": "chirurgeon", "name": "Chirurgeon" }
+  ],
+  "armor": [
+    { "key": "leather", "name": "Leather", "base": 11, "dex": "full", "slots": 1 },
+    { "key": "chainmail", "name": "Chainmail", "base": 13, "dex": "full", "slots": 2 },
+    { "key": "plate", "name": "Plate", "base": 15, "dex": "none", "slots": 3 },
+    { "key": "mithral-chain", "name": "Mithral Chainmail", "base": 13, "dex": "full", "slots": 1 },
+    { "key": "mithral-plate", "name": "Mithral Plate", "base": 15, "dex": "none", "slots": 1 }
+  ],
+  "shield": { "bonus": 2 },
+  "derived": {
+    "hitPointsAtFirstLevel": "class.hitDie + con.mod",
+    "hitPointsPerLevel": "floor(class.hitDie / 2) + 1",
+    "initiative": "dex.mod",
+    "carrySlots": "max(str.score, 10)"
+  },
+  "currency": { "units": ["gp", "sp", "cp"] },
+  "extras": { "talents": true, "spells": true, "notes": true }
+}

@@ -4,7 +4,9 @@ import {
   createCampaign,
   joinCampaign,
   listCampaigns,
+  listSystems,
   type CampaignListItem,
+  type SystemSummary,
 } from "../api/client";
 import { useAuth } from "../auth/AuthContext";
 import { FormError } from "../components/FormError";
@@ -71,9 +73,27 @@ function CreateCampaignPanel({ onCreated }: { onCreated: (id: string) => void })
   const [open, setOpen] = useState(false);
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
-  const [system, setSystem] = useState("");
+  const [system, setSystem] = useState("generic");
+  const [systems, setSystems] = useState<SystemSummary[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    listSystems()
+      .then(({ systems: rows }) => {
+        if (!cancelled) {
+          const unique = Array.from(new Map(rows.map((s) => [s.key, s])).values());
+          setSystems(unique);
+        }
+      })
+      .catch(() => {
+        // Fallback to generic if systems list fails
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   async function onSubmit(event: FormEvent) {
     event.preventDefault();
@@ -87,7 +107,7 @@ function CreateCampaignPanel({ onCreated }: { onCreated: (id: string) => void })
       const { campaign } = await createCampaign({
         name: name.trim(),
         description: description.trim(),
-        system: system.trim(),
+        system: system.trim() || "generic",
       });
       onCreated(campaign.id);
     } catch (err) {
@@ -131,12 +151,18 @@ function CreateCampaignPanel({ onCreated }: { onCreated: (id: string) => void })
           </label>
           <label>
             Game system
-            <input
-              data-testid="system-input"
-              type="text"
+            <select
+              data-testid="system-select"
               value={system}
               onChange={(e) => setSystem(e.target.value)}
-            />
+            >
+              <option value="generic">None (Generic)</option>
+              {systems.map((s) => (
+                <option key={s.key} value={s.key}>
+                  {s.name}
+                </option>
+              ))}
+            </select>
           </label>
           <button data-testid="campaign-create-submit" type="submit" className="btn btn-primary" disabled={submitting}>
             Create campaign

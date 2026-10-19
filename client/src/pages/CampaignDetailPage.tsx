@@ -1,14 +1,67 @@
 import { useCallback, useEffect, useState, type FormEvent } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { Link, useNavigate, useParams } from "react-router-dom";
 import {
   createInvite,
+  createSheet,
   deleteCampaign,
   getCampaign,
+  getSystem,
+  listCampaignSheets,
+  listSystems,
   updateCampaign,
   type CampaignDetail,
+  type SheetSummary,
+  type SystemConfig,
+  type SystemSummary,
 } from "../api/client";
 import { useAuth } from "../auth/AuthContext";
 import { FormError } from "../components/FormError";
+
+function rollDie(sides: number): number {
+  return Math.floor(Math.random() * sides) + 1;
+}
+
+export function rollAbilitiesForSystem(config: SystemConfig): Record<string, number> {
+  const { min, max } = config.abilityScoreRange;
+  const clamp = (n: number) => Math.max(min, Math.min(max, n));
+  const methods = config.creation.methods;
+
+  if (methods.includes("roll3d6InOrder")) {
+    const threshold = config.creation.mulliganIfAllBelow;
+    for (let attempt = 0; attempt < 50; attempt += 1) {
+      const scores: Record<string, number> = {};
+      for (const a of config.abilities) {
+        scores[a.key] = clamp(rollDie(6) + rollDie(6) + rollDie(6));
+      }
+      if (!threshold || Object.values(scores).some((s) => s >= threshold) || attempt === 49) {
+        return scores;
+      }
+    }
+  }
+
+  if (methods.includes("roll4d6DropLowest")) {
+    const scores: Record<string, number> = {};
+    for (const a of config.abilities) {
+      const rolls = [rollDie(6), rollDie(6), rollDie(6), rollDie(6)].sort((x, y) => x - y);
+      scores[a.key] = clamp(rolls[1] + rolls[2] + rolls[3]);
+    }
+    return scores;
+  }
+
+  if (methods.includes("standardArray") && config.creation.standardArray) {
+    const scores: Record<string, number> = {};
+    config.abilities.forEach((a, idx) => {
+      scores[a.key] = clamp(config.creation.standardArray?.[idx] ?? 10);
+    });
+    return scores;
+  }
+
+  const fallback: Record<string, number> = {};
+  for (const a of config.abilities) {
+    fallback[a.key] = clamp(10);
+  }
+  return fallback;
+}
 
 export function CampaignDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -72,6 +125,9 @@ export function CampaignDetailPage() {
           onDeleted={() => navigate("/")}
         />
       )}
+      {campaign.system && campaign.system !== "generic" && (
+        <SheetsSection campaign={campaign} isOwner={isOwner} />
+      )}
       <section>
         <h2>Members</h2>
         <ul data-testid="member-list" className="member-list">
@@ -84,6 +140,295 @@ export function CampaignDetailPage() {
       </section>
       {isOwner && <InviteSection campaign={campaign} onInviteCreated={setCampaign} />}
     </main>
+  );
+}
+
+function SheetsSection({ campaign, isOwner }: { campaign: CampaignDetail; isOwner: boolean }) {
+  const navigate = useNavigate();
+  const [sheets, setSheets] = useState<SheetSummary[]>([]);
+  const [systemConfig, setSystemConfig] = useState<SystemConfig | null>(null);
+  const [creatingKind, setCreatingKind] = useState<"PC" | "NPC" | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    listCampaignSheets(campaign.id)
+      .then(({ sheets: rows }) => {
+        if (!cancelled) setSheets(rows);
+      })
+      .catch((err: unknown) => {
+        if (!cancelled) setError(err instanceof Error ? err.message : "Failed to load sheets");
+      });
+    getSystem(campaign.system)
+      .then(({ system }) => {
+        if (!cancelled) setSystemConfig(system);
+      })
+      .catch(() => {
+        // System might not be found if deleted
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [campaign.id, campaign.system]);
+
+  return (
+    <section data-testid="sheet-section" className="panel">
+      <h2>Character Sheets</h2>
+      <div className="button-row">
+        <button
+          data-testid="sheet-create-pc-button"
+          type="button"
+          className="btn btn-primary"
+          onClick={() => setCreatingKind((k) => (k === "PC" ? null : "PC"))}
+        >
+          New character
+        </button>
+        {isOwner && (
+          <button
+            data-testid="sheet-create-npc-button"
+            type="button"
+            className="btn btn-secondary"
+            onClick={() => setCreatingKind((k) => (k === "NPC" ? null : "NPC"))}
+          >
+            New NPC
+          </button>
+        )}
+      </div>
+      <FormError message={error} />
+      {creatingKind && systemConfig && (
+        <CreateSheetForm
+          campaignId={campaign.id}
+          kind={creatingKind}
+          config={systemConfig}
+          onCreated={(sheetId) => navigate(`/sheets/${sheetId}`)}
+          onCancel={() => setCreatingKind(null)}
+        />
+      )}
+      {sheets.length === 0 ? (
+        <p className="empty-state" style={{ marginTop: "0.75rem" }}>
+          No character sheets yet.
+        </p>
+      ) : (
+        <ul data-testid="sheet-list" className="campaign-list">
+          {sheets.map((s) => (
+            <li key={s.id}>
+              <Link
+                data-testid="sheet-item"
+                className="campaign-item"
+                to={`/sheets/${s.id}`}
+              >
+                <span data-testid="sheet-kind-badge" className="badge">
+                  {s.kind}
+                </span>
+                <span className="campaign-item-name">{s.name}</span>
+                <span className="campaign-item-system">
+                  Lv {s.level} {s.ancestryId ?? ""} {s.classId ?? ""}
+                </span>
+                {s.ownerName && (
+                  <span className="campaign-item-relationship">{s.ownerName}</span>
+                )}
+              </Link>
+            </li>
+          ))}
+        </ul>
+      )}
+    </section>
+  );
+}
+
+function CreateSheetForm({
+  campaignId,
+  kind,
+  config,
+  onCreated,
+  onCancel,
+}: {
+  campaignId: string;
+  kind: "PC" | "NPC";
+  config: SystemConfig;
+  onCreated: (sheetId: string) => void;
+  onCancel: () => void;
+}) {
+  const defaultAbilities = () => {
+    const init: Record<string, number> = {};
+    const mid = Math.max(config.abilityScoreRange.min, Math.min(config.abilityScoreRange.max, 10));
+    for (const a of config.abilities) {
+      init[a.key] = mid;
+    }
+    return init;
+  };
+
+  const [name, setName] = useState("");
+  const [ancestryId, setAncestryId] = useState(config.ancestries[0]?.key ?? "");
+  const [classId, setClassId] = useState(config.classes[0]?.key ?? "");
+  const [backgroundId, setBackgroundId] = useState(config.backgrounds[0]?.key ?? "");
+  const [armorId, setArmorId] = useState("");
+  const [shield, setShield] = useState(false);
+  const [abilities, setAbilities] = useState<Record<string, number>>(defaultAbilities);
+  const [error, setError] = useState<string | null>(null);
+  const [submitting, setSubmitting] = useState(false);
+
+  function onRollAbilities() {
+    setAbilities(rollAbilitiesForSystem(config));
+  }
+
+  async function onSubmit(event: FormEvent) {
+    event.preventDefault();
+    setError(null);
+    if (name.trim() === "") {
+      setError("Character name is required");
+      return;
+    }
+    setSubmitting(true);
+    try {
+      const { sheet } = await createSheet(campaignId, {
+        kind,
+        name: name.trim(),
+        ancestryId: ancestryId || null,
+        classId: classId || null,
+        backgroundId: backgroundId || null,
+        abilities,
+        armorId: armorId || null,
+        shield,
+      });
+      onCreated(sheet.id);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to create character sheet");
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  return (
+    <form className="card form" onSubmit={onSubmit}>
+      <h3>New {kind === "PC" ? "Player Character" : "NPC"}</h3>
+      <FormError message={error} />
+      <label>
+        Name
+        <input
+          data-testid="sheet-name-input"
+          type="text"
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+        />
+      </label>
+      <label>
+        Ancestry / Species
+        <select
+          data-testid="ancestry-select"
+          value={ancestryId}
+          onChange={(e) => setAncestryId(e.target.value)}
+        >
+          <option value="">None</option>
+          {config.ancestries.map((a) => (
+            <option key={a.key} value={a.key}>
+              {a.name}
+            </option>
+          ))}
+        </select>
+      </label>
+      <label>
+        Class
+        <select
+          data-testid="class-select"
+          value={classId}
+          onChange={(e) => setClassId(e.target.value)}
+        >
+          {config.classes.map((c) => (
+            <option key={c.key} value={c.key}>
+              {c.name} (d{c.hitDie})
+            </option>
+          ))}
+        </select>
+      </label>
+      <label>
+        Background
+        <select
+          data-testid="background-select"
+          value={backgroundId}
+          onChange={(e) => setBackgroundId(e.target.value)}
+        >
+          <option value="">None</option>
+          {config.backgrounds.map((b) => (
+            <option key={b.key} value={b.key}>
+              {b.name}
+            </option>
+          ))}
+        </select>
+      </label>
+
+      <div>
+        <div className="detail-header">
+          <strong>Abilities</strong>
+          <button
+            data-testid="roll-abilities-button"
+            type="button"
+            className="btn btn-secondary"
+            onClick={onRollAbilities}
+          >
+            Roll abilities
+          </button>
+        </div>
+        <div className="abilities-grid">
+          {config.abilities.map((a) => (
+            <label key={a.key}>
+              {a.name} ({a.abbreviation})
+              <input
+                data-testid={`ability-input-${a.key}`}
+                type="number"
+                min={config.abilityScoreRange.min}
+                max={config.abilityScoreRange.max}
+                value={abilities[a.key] ?? 10}
+                onChange={(e) =>
+                  setAbilities((prev) => ({
+                    ...prev,
+                    [a.key]: Number.parseInt(e.target.value, 10) || config.abilityScoreRange.min,
+                  }))
+                }
+              />
+            </label>
+          ))}
+        </div>
+      </div>
+
+      <label>
+        Armor
+        <select
+          data-testid="armor-select"
+          value={armorId}
+          onChange={(e) => setArmorId(e.target.value)}
+        >
+          <option value="">Unarmored</option>
+          {config.armor.map((a) => (
+            <option key={a.key} value={a.key}>
+              {a.name} (AC {a.base})
+            </option>
+          ))}
+        </select>
+      </label>
+      <label className="role-option">
+        <input
+          data-testid="shield-checkbox"
+          type="checkbox"
+          checked={shield}
+          onChange={(e) => setShield(e.target.checked)}
+        />
+        Carry Shield {config.shield ? `(+${config.shield.bonus} AC)` : ""}
+      </label>
+      <div className="button-row">
+        <button
+          data-testid="sheet-save-button"
+          type="submit"
+          className="btn btn-primary"
+          disabled={submitting}
+        >
+          Create {kind}
+        </button>
+        <button type="button" className="btn btn-secondary" onClick={onCancel}>
+          Cancel
+        </button>
+      </div>
+    </form>
   );
 }
 
@@ -179,7 +524,23 @@ function CampaignEditForm({
   const [name, setName] = useState(campaign.name);
   const [description, setDescription] = useState(campaign.description);
   const [system, setSystem] = useState(campaign.system);
+  const [systems, setSystems] = useState<SystemSummary[]>([]);
   const [submitting, setSubmitting] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    listSystems()
+      .then(({ systems: rows }) => {
+        if (!cancelled) {
+          const unique = Array.from(new Map(rows.map((s) => [s.key, s])).values());
+          setSystems(unique);
+        }
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   async function onSubmit(event: FormEvent) {
     event.preventDefault();
@@ -204,24 +565,44 @@ function CampaignEditForm({
 
   return (
     <form data-testid="campaign-edit-form" className="card form" onSubmit={onSubmit}>
-      <h2>Edit campaign</h2>
       <label>
         Name
-        <input data-testid="campaign-name-input" type="text" value={name} onChange={(e) => setName(e.target.value)} />
+        <input
+          data-testid="campaign-name-input"
+          type="text"
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+        />
       </label>
       <label>
         Description
-        <input data-testid="description-input" type="text" value={description} onChange={(e) => setDescription(e.target.value)} />
+        <input
+          data-testid="description-input"
+          type="text"
+          value={description}
+          onChange={(e) => setDescription(e.target.value)}
+        />
       </label>
       <label>
         Game system
-        <input data-testid="system-input" type="text" value={system} onChange={(e) => setSystem(e.target.value)} />
+        <select
+          data-testid="system-select"
+          value={system}
+          onChange={(e) => setSystem(e.target.value)}
+        >
+          <option value="generic">None (Generic)</option>
+          {systems.map((s) => (
+            <option key={s.key} value={s.key}>
+              {s.name}
+            </option>
+          ))}
+        </select>
       </label>
       <div className="button-row">
         <button data-testid="save-button" type="submit" className="btn btn-primary" disabled={submitting}>
           Save
         </button>
-        <button data-testid="cancel-button" type="button" className="btn btn-secondary" onClick={onCancel}>
+        <button type="button" className="btn btn-secondary" onClick={onCancel}>
           Cancel
         </button>
       </div>
@@ -236,47 +617,42 @@ function InviteSection({
   campaign: CampaignDetail;
   onInviteCreated: (campaign: CampaignDetail) => void;
 }) {
-  const [lastToken, setLastToken] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [busy, setBusy] = useState(false);
+  const [generating, setGenerating] = useState(false);
 
   const onGenerate = useCallback(async () => {
     setError(null);
-    setBusy(true);
+    setGenerating(true);
     try {
-      const { invite } = await createInvite(campaign.id);
-      setLastToken(invite.token);
-      onInviteCreated({ ...campaign, invites: [...campaign.invites, invite] });
+      await createInvite(campaign.id);
+      const { campaign: refreshed } = await getCampaign(campaign.id);
+      onInviteCreated(refreshed);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Something went wrong, please try again");
     } finally {
-      setBusy(false);
+      setGenerating(false);
     }
-  }, [campaign, onInviteCreated]);
+  }, [campaign.id, onInviteCreated]);
+
+  const latest = campaign.invites[0];
 
   return (
     <section className="panel">
-      <h2>Invite codes</h2>
+      <h2>Invite players</h2>
       <FormError message={error} />
-      <div className="button-row">
-        <button data-testid="invite-generate-button" type="button" className="btn btn-primary" disabled={busy} onClick={onGenerate}>
-          Generate invite code
-        </button>
-        {lastToken && (
-          <code data-testid="invite-code" className="invite-code">
-            {lastToken}
-          </code>
-        )}
-      </div>
-      {campaign.invites.length > 0 && (
-        <ul data-testid="invite-list" className="invite-list">
-          {campaign.invites.map((invite) => (
-            <li key={invite.id}>
-              <code>{invite.token}</code>
-              <span className="invite-expiry">expires {new Date(invite.expiresAt).toLocaleDateString()}</span>
-            </li>
-          ))}
-        </ul>
+      <button
+        data-testid="invite-generate-button"
+        type="button"
+        className="btn btn-primary"
+        disabled={generating}
+        onClick={onGenerate}
+      >
+        Generate invite code
+      </button>
+      {latest && (
+        <p className="invite-box">
+          Share code: <code data-testid="invite-code">{latest.token}</code>
+        </p>
       )}
     </section>
   );

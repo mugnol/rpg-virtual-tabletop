@@ -1,4 +1,4 @@
-import { useNavigate } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "../auth/AuthContext";
 
 export function NavBar() {
@@ -12,7 +12,17 @@ export function NavBar() {
 
   return (
     <header className="nav-bar">
-      <span className="nav-brand">RPG Virtual Tabletop</span>
+      <Link to="/" className="nav-brand">
+        RPG Virtual Tabletop
+      </Link>
+      <nav className="nav-links">
+        <Link to="/" className="nav-link">
+          Campaigns
+        </Link>
+        <Link to="/systems" className="nav-link">
+          Systems
+        </Link>
+      </nav>
       <span data-testid="nav-user" className="nav-user">
         {user ? `${user.displayName} (${user.role})` : ""}
       </span>

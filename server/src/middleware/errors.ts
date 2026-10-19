@@ -34,6 +34,16 @@ export function errorHandler(err: unknown, req: Request, res: Response, _next: N
     });
     return;
   }
+  if (
+    err instanceof SyntaxError &&
+    "status" in err &&
+    (err as { status?: number }).status === 400
+  ) {
+    res.status(400).json({
+      error: { code: "BAD_JSON", message: "Invalid JSON" },
+    });
+    return;
+  }
   if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2002") {
     res.status(409).json({
       error: { code: "CONFLICT", message: "A record with this value already exists" },

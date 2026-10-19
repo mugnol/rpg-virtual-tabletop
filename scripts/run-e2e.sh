@@ -16,7 +16,7 @@ export DATABASE_URL="file:./e2e.db"
 export JWT_SECRET="e2e-insecure-secret"
 
 rm -f server/prisma/e2e.db server/prisma/e2e.db-journal
-(cd server && npx prisma db push --skip-generate)
+(cd server && npx prisma db push --skip-generate && npm run db:seed)
 
 npm run build
 

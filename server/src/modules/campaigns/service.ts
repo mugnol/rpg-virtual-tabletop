@@ -2,6 +2,7 @@ import type { Prisma } from "@prisma/client";
 import { prisma } from "../../db.js";
 import { generateInviteToken } from "../../lib/tokens.js";
 import { ApiError } from "../../middleware/errors.js";
+import { assertKnownCampaignSystem } from "../systems/service.js";
 import type { CampaignCreateInput, CampaignUpdateInput } from "./schemas.js";
 
 export const campaignInclude = {
@@ -23,7 +24,7 @@ const NOT_OWNER = new ApiError(403, "FORBIDDEN", "Only the campaign owner can do
 
 const INVITE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 
-async function findCampaign(id: string): Promise<CampaignWithRelations> {
+export async function findCampaign(id: string): Promise<CampaignWithRelations> {
   const campaign = await prisma.campaign.findUnique({ where: { id }, include: campaignInclude });
   if (!campaign) {
     throw CAMPAIGN_NOT_FOUND;
@@ -31,18 +32,18 @@ async function findCampaign(id: string): Promise<CampaignWithRelations> {
   return campaign;
 }
 
-function isParticipant(campaign: CampaignWithRelations, userId: string): boolean {
+export function isParticipant(campaign: CampaignWithRelations, userId: string): boolean {
   return campaign.ownerId === userId || campaign.members.some((m) => m.userId === userId);
 }
 
-function assertParticipant(campaign: CampaignWithRelations, userId: string): void {
+export function assertParticipant(campaign: CampaignWithRelations, userId: string): void {
   if (!isParticipant(campaign, userId)) {
     // Existence is not revealed to non-participants (EF-7.1).
     throw CAMPAIGN_NOT_FOUND;
   }
 }
 
-function assertOwner(campaign: CampaignWithRelations, userId: string): void {
+export function assertOwner(campaign: CampaignWithRelations, userId: string): void {
   assertParticipant(campaign, userId);
   if (campaign.ownerId !== userId) {
     throw NOT_OWNER;
@@ -97,6 +98,7 @@ export async function listCampaigns(userId: string) {
 }
 
 export async function createCampaign(userId: string, input: CampaignCreateInput) {
+  await assertKnownCampaignSystem(input.system);
   const campaign = await prisma.$transaction(async (tx) => {
     const created = await tx.campaign.create({
       data: { name: input.name, description: input.description, system: input.system, ownerId: userId },
@@ -116,6 +118,9 @@ export async function getCampaignForUser(userId: string, campaignId: string) {
 export async function updateCampaign(userId: string, campaignId: string, input: CampaignUpdateInput) {
   const existing = await findCampaign(campaignId);
   assertOwner(existing, userId);
+  if (input.system !== undefined) {
+    await assertKnownCampaignSystem(input.system);
+  }
   const campaign = await prisma.campaign.update({
     where: { id: campaignId },
     data: input,

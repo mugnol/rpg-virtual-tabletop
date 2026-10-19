@@ -6,6 +6,8 @@ import { config } from "./config.js";
 import { apiNotFound, errorHandler } from "./middleware/errors.js";
 import { authRouter } from "./modules/auth/routes.js";
 import { campaignsRouter } from "./modules/campaigns/routes.js";
+import { sheetsRouter } from "./modules/sheets/routes.js";
+import { systemsRouter } from "./modules/systems/routes.js";
 
 export function createApp(): express.Express {
   const app = express();
@@ -17,6 +19,8 @@ export function createApp(): express.Express {
   });
   app.use("/api/auth", authRouter);
   app.use("/api/campaigns", campaignsRouter);
+  app.use("/api/systems", systemsRouter);
+  app.use("/api/sheets", sheetsRouter);
   app.use("/api", apiNotFound);
 
   // In production (and E2E) the server serves the built client; in dev the

@@ -295,3 +295,75 @@ a {
   color: var(--text-dim);
   font-size: 0.85rem;
 }
+
+.nav-links {
+  display: flex;
+  gap: 1rem;
+  margin-right: auto;
+}
+
+.nav-brand {
+  margin-right: 1rem;
+  color: var(--text);
+  text-decoration: none;
+}
+
+.nav-link {
+  color: var(--text-dim);
+  text-decoration: none;
+  font-size: 0.95rem;
+}
+
+.nav-link:hover {
+  color: var(--text);
+}
+
+.form select,
+.form textarea,
+.form input[type="number"] {
+  padding: 0.55rem 0.7rem;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--text);
+  font-size: 0.95rem;
+  font-family: inherit;
+}
+
+.system-card {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.system-attribution {
+  margin: 0;
+  font-size: 0.8rem;
+  color: var(--text-dim);
+}
+
+.abilities-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: 0.6rem;
+  margin-top: 0.5rem;
+}
+
+.stats-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1.25rem;
+  margin-top: 1rem;
+}
+
+.stat-box {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+}
+
+.stat-label {
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  color: var(--text-dim);
+}

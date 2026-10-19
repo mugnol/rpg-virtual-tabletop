@@ -40,12 +40,125 @@ export interface CampaignDetail {
   invites: CampaignInvite[];
 }
 
+export interface SystemSummary {
+  key: string;
+  version: string;
+  name: string;
+  attribution: string;
+  builtin: boolean;
+}
+
+export interface SystemAbility {
+  key: string;
+  name: string;
+  abbreviation: string;
+}
+
+export interface SystemOption {
+  key: string;
+  name: string;
+}
+
+export interface SystemClass extends SystemOption {
+  hitDie: number;
+  spellcasting?: {
+    ability: string;
+    knownByLevel: number[];
+  };
+}
+
+export interface SystemArmor extends SystemOption {
+  base: number;
+  dex: "full" | "none" | number;
+  slots?: number;
+}
+
+export interface SystemConfig {
+  key: string;
+  name: string;
+  version: string;
+  attribution: string;
+  abilities: SystemAbility[];
+  abilityScoreRange: { min: number; max: number };
+  abilityModifier: { formula: string; min?: number; max?: number };
+  creation: {
+    methods: Array<"manual" | "roll3d6InOrder" | "roll4d6DropLowest" | "standardArray">;
+    mulliganIfAllBelow?: number;
+    standardArray?: number[];
+  };
+  levels: {
+    max: number;
+    advancement:
+      | { mode: "multiplier"; xpMultiplier: number; resetOnAdvance: boolean }
+      | { mode: "thresholds"; thresholds: number[] };
+    proficiencyBonus?: { formula: string };
+  };
+  classes: SystemClass[];
+  ancestries: SystemOption[];
+  backgrounds: SystemOption[];
+  armor: SystemArmor[];
+  shield?: { bonus: number };
+  derived: {
+    hitPointsAtFirstLevel?: string;
+    hitPointsPerLevel?: string;
+    initiative?: string;
+    carrySlots?: string;
+  };
+  currency: { units: string[] };
+  extras: { talents?: boolean; spells?: boolean; notes?: boolean };
+}
+
+export interface SheetSummary {
+  id: string;
+  kind: "PC" | "NPC";
+  name: string;
+  ownerId: string | null;
+  ownerName: string | null;
+  ancestryId: string | null;
+  classId: string | null;
+  level: number;
+  systemKey: string;
+}
+
+export interface SheetExtras {
+  talents: string[];
+  spells: string[];
+  notes: string;
+  coins: Record<string, number>;
+}
+
+export interface SheetDetail extends SheetSummary {
+  campaignId: string;
+  backgroundId: string | null;
+  xp: number;
+  abilities: Record<string, { score: number; modifier: number }>;
+  hpMax: number;
+  hpCurrent: number;
+  armorId: string | null;
+  shield: boolean;
+  extras: SheetExtras;
+  derived: {
+    hpPerLevel: number | null;
+    proficiencyBonus: number | null;
+    initiative: number | null;
+    carrySlots: number | null;
+    armorClass: number;
+    nextLevelXp: number | null;
+    spellcasting: {
+      ability: string;
+      known: number;
+      allowed: number;
+    } | null;
+  };
+}
+
 /** Error thrown for any non-2xx API response; message is the server's message. */
 export class ApiError extends Error {
   constructor(
     public readonly status: number,
     public readonly code: string,
     message: string,
+    public readonly details?: Array<{ path: string; message: string }>,
   ) {
     super(message);
     this.name = "ApiError";
@@ -53,7 +166,11 @@ export class ApiError extends Error {
 }
 
 interface ErrorBody {
-  error?: { code?: string; message?: string };
+  error?: {
+    code?: string;
+    message?: string;
+    details?: Array<{ path: string; message: string }>;
+  };
 }
 
 async function request<T>(method: string, path: string, body?: unknown): Promise<T> {
@@ -69,10 +186,15 @@ async function request<T>(method: string, path: string, body?: unknown): Promise
   const data = (await res.json().catch(() => ({}))) as ErrorBody & T;
   if (!res.ok) {
     const err = data.error;
+    const detailSuffix =
+      err?.details && err.details.length > 0
+        ? `: ${err.details.map((d) => `${d.path} ${d.message}`).join("; ")}`
+        : "";
     throw new ApiError(
       res.status,
       err?.code ?? "INTERNAL_ERROR",
-      err?.message ?? "Something went wrong, please try again",
+      `${err?.message ?? "Something went wrong, please try again"}${detailSuffix}`,
+      err?.details,
     );
   }
   return data;
@@ -134,4 +256,92 @@ export function createInvite(id: string): Promise<{ invite: CampaignInvite }> {
 
 export function joinCampaign(token: string): Promise<{ campaign: CampaignDetail }> {
   return request("POST", "/campaigns/join", { token });
+}
+
+export function listSystems(): Promise<{ systems: SystemSummary[] }> {
+  return request("GET", "/systems");
+}
+
+export function getSystem(key: string): Promise<{ system: SystemConfig }> {
+  return request("GET", `/systems/${key}`);
+}
+
+export async function importSystemRaw(rawJson: string): Promise<{ system: SystemConfig }> {
+  const res = await fetch("/api/systems/import", {
+    method: "POST",
+    credentials: "same-origin",
+    headers: { "Content-Type": "application/json" },
+    body: rawJson,
+  });
+  const data = (await res.json().catch(() => ({}))) as ErrorBody & { system: SystemConfig };
+  if (!res.ok) {
+    const err = data.error;
+    const detailSuffix =
+      err?.details && err.details.length > 0
+        ? `: ${err.details.map((d) => `${d.path} ${d.message}`).join("; ")}`
+        : "";
+    throw new ApiError(
+      res.status,
+      err?.code ?? "INTERNAL_ERROR",
+      `${err?.message ?? "Failed to import system"}${detailSuffix}`,
+      err?.details,
+    );
+  }
+  return data;
+}
+
+export function listCampaignSheets(campaignId: string): Promise<{ sheets: SheetSummary[] }> {
+  return request("GET", `/campaigns/${campaignId}/sheets`);
+}
+
+export interface CreateSheetInput {
+  kind: "PC" | "NPC";
+  name: string;
+  ancestryId?: string | null;
+  classId?: string | null;
+  backgroundId?: string | null;
+  abilities: Record<string, number>;
+  armorId?: string | null;
+  shield?: boolean;
+  extras?: Partial<SheetExtras>;
+}
+
+export function createSheet(
+  campaignId: string,
+  input: CreateSheetInput,
+): Promise<{ sheet: SheetDetail }> {
+  return request("POST", `/campaigns/${campaignId}/sheets`, input);
+}
+
+export function getSheet(id: string): Promise<{ sheet: SheetDetail }> {
+  return request("GET", `/sheets/${id}`);
+}
+
+export interface UpdateSheetInput {
+  name?: string;
+  ancestryId?: string | null;
+  classId?: string | null;
+  backgroundId?: string | null;
+  xp?: number;
+  abilities?: Record<string, number>;
+  hpMax?: number;
+  hpCurrent?: number;
+  armorId?: string | null;
+  shield?: boolean;
+  extras?: Partial<SheetExtras>;
+}
+
+export function updateSheet(
+  id: string,
+  input: UpdateSheetInput,
+): Promise<{ sheet: SheetDetail }> {
+  return request("PATCH", `/sheets/${id}`, input);
+}
+
+export function levelUpSheet(id: string): Promise<{ sheet: SheetDetail }> {
+  return request("POST", `/sheets/${id}/levelup`, {});
+}
+
+export function deleteSheet(id: string): Promise<void> {
+  return request("DELETE", `/sheets/${id}`);
 }

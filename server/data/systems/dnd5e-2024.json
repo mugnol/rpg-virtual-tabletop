@@ -1,0 +1,86 @@
+{
+  "key": "dnd5e-2024",
+  "name": "Dungeons & Dragons 5e (2024)",
+  "version": "5.2.1",
+  "attribution": "This work includes material from the System Reference Document 5.2.1 by Wizards of the Coast LLC, available at dnd.wizards.com/resources/system-reference-document and licensed under the Creative Commons Attribution 4.0 International License (CC-BY-4.0).",
+  "abilities": [
+    { "key": "str", "name": "Strength", "abbreviation": "Str" },
+    { "key": "dex", "name": "Dexterity", "abbreviation": "Dex" },
+    { "key": "con", "name": "Constitution", "abbreviation": "Con" },
+    { "key": "int", "name": "Intelligence", "abbreviation": "Int" },
+    { "key": "wis", "name": "Wisdom", "abbreviation": "Wis" },
+    { "key": "cha", "name": "Charisma", "abbreviation": "Cha" }
+  ],
+  "abilityScoreRange": { "min": 3, "max": 20 },
+  "abilityModifier": {
+    "formula": "floor((score - 10) / 2)"
+  },
+  "creation": {
+    "methods": ["standardArray", "roll4d6DropLowest", "manual"],
+    "standardArray": [15, 14, 13, 12, 10, 8]
+  },
+  "levels": {
+    "max": 20,
+    "advancement": {
+      "mode": "thresholds",
+      "thresholds": [
+        0, 300, 900, 2700, 6500, 14000, 23000, 34000, 48000, 64000,
+        85000, 100000, 120000, 140000, 165000, 195000, 225000, 265000, 305000, 355000
+      ]
+    },
+    "proficiencyBonus": { "formula": "2 + floor((level - 1) / 4)" }
+  },
+  "classes": [
+    { "key": "barbarian", "name": "Barbarian", "hitDie": 12 },
+    { "key": "fighter", "name": "Fighter", "hitDie": 10 },
+    { "key": "paladin", "name": "Paladin", "hitDie": 10 },
+    { "key": "ranger", "name": "Ranger", "hitDie": 10 },
+    { "key": "bard", "name": "Bard", "hitDie": 8 },
+    { "key": "cleric", "name": "Cleric", "hitDie": 8 },
+    { "key": "druid", "name": "Druid", "hitDie": 8 },
+    { "key": "monk", "name": "Monk", "hitDie": 8 },
+    { "key": "rogue", "name": "Rogue", "hitDie": 8 },
+    { "key": "warlock", "name": "Warlock", "hitDie": 8 },
+    { "key": "sorcerer", "name": "Sorcerer", "hitDie": 6 },
+    { "key": "wizard", "name": "Wizard", "hitDie": 6 }
+  ],
+  "ancestries": [
+    { "key": "dragonborn", "name": "Dragonborn" },
+    { "key": "dwarf", "name": "Dwarf" },
+    { "key": "elf", "name": "Elf" },
+    { "key": "gnome", "name": "Gnome" },
+    { "key": "goliath", "name": "Goliath" },
+    { "key": "halfling", "name": "Halfling" },
+    { "key": "human", "name": "Human" },
+    { "key": "orc", "name": "Orc" },
+    { "key": "tiefling", "name": "Tiefling" }
+  ],
+  "backgrounds": [
+    { "key": "acolyte", "name": "Acolyte" },
+    { "key": "criminal", "name": "Criminal" },
+    { "key": "sage", "name": "Sage" },
+    { "key": "soldier", "name": "Soldier" }
+  ],
+  "armor": [
+    { "key": "padded", "name": "Padded", "base": 11, "dex": "full" },
+    { "key": "leather", "name": "Leather", "base": 11, "dex": "full" },
+    { "key": "studded-leather", "name": "Studded Leather", "base": 12, "dex": "full" },
+    { "key": "hide", "name": "Hide", "base": 12, "dex": 2 },
+    { "key": "chain-shirt", "name": "Chain Shirt", "base": 13, "dex": 2 },
+    { "key": "scale-mail", "name": "Scale Mail", "base": 14, "dex": 2 },
+    { "key": "breastplate", "name": "Breastplate", "base": 14, "dex": 2 },
+    { "key": "half-plate", "name": "Half Plate", "base": 15, "dex": 2 },
+    { "key": "ring-mail", "name": "Ring Mail", "base": 14, "dex": "none" },
+    { "key": "chain-mail", "name": "Chain Mail", "base": 16, "dex": "none" },
+    { "key": "splint", "name": "Splint", "base": 17, "dex": "none" },
+    { "key": "plate", "name": "Plate", "base": 18, "dex": "none" }
+  ],
+  "shield": { "bonus": 2 },
+  "derived": {
+    "hitPointsAtFirstLevel": "class.hitDie + con.mod",
+    "hitPointsPerLevel": "floor(class.hitDie / 2) + 1 + con.mod",
+    "initiative": "dex.mod"
+  },
+  "currency": { "units": ["gp", "sp", "cp"] },
+  "extras": { "talents": false, "spells": true, "notes": true }
+}
