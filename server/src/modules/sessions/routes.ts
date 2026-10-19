@@ -1,6 +1,7 @@
 import { Router } from "express";
 import { asyncHandler, parseBody } from "../../lib/http.js";
 import { requireAuth } from "../../middleware/auth.js";
+import { sessionMapsRouter } from "../maps/routes.js";
 import { sessionCreateSchema, sessionUpdateSchema } from "./schemas.js";
 import {
   createSession,
@@ -36,6 +37,7 @@ campaignSessionsRouter.post(
 export const sessionsRouter = Router();
 
 sessionsRouter.use(requireAuth);
+sessionsRouter.use("/:sessionId/maps", sessionMapsRouter);
 
 sessionsRouter.get(
   "/:id",

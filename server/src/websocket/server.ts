@@ -5,6 +5,16 @@ import { config } from "../config.js";
 import { prisma } from "../db.js";
 import { verifySessionToken } from "../lib/tokens.js";
 import { rollDice } from "../modules/dice/dice.js";
+import {
+  deleteToken,
+  endCombat,
+  executeCombatAttack,
+  moveOrUpdateToken,
+  nextCombatTurn,
+  placeToken,
+  startCombat,
+  updateMap,
+} from "../modules/maps/service.js";
 import { findSessionWithCampaign } from "../modules/sessions/service.js";
 
 interface SessionClient {
@@ -143,14 +153,44 @@ export function attachWebSocketServer(server: http.Server): WebSocketServer {
         rooms.get(sessionId)!.add(client);
 
         // Send initial session state to the newly connected client
-        prisma.sessionMessage
-          .findMany({
+        Promise.all([
+          prisma.sessionMessage.findMany({
             where: { sessionId, deleted: false },
             include: { user: { select: { id: true, displayName: true } } },
             orderBy: { createdAt: "asc" },
             take: 50,
-          })
-          .then((messages) => {
+          }),
+          prisma.sessionMap.findMany({
+            where: { sessionId },
+            include: { tokens: true, combat: true },
+            orderBy: { createdAt: "asc" },
+          }),
+        ])
+          .then(async ([messages, existingMaps]) => {
+            let maps = existingMaps;
+            if (maps.length === 0) {
+              const defaultMap = await prisma.sessionMap.create({
+                data: {
+                  sessionId,
+                  name: "Dungeon Map",
+                  theme: "stone-dungeon",
+                  width: 12,
+                  height: 8,
+                  allowPlayerMovement: false,
+                  combat: {
+                    create: {
+                      active: false,
+                      round: 1,
+                      turnIndex: 0,
+                      turnOrder: "[]",
+                    },
+                  },
+                },
+                include: { tokens: true, combat: true },
+              });
+              maps = [defaultMap];
+            }
+
             const presence = getRoomPresence(sessionId);
             ws.send(
               JSON.stringify({
@@ -175,11 +215,23 @@ export function attachWebSocketServer(server: http.Server): WebSocketServer {
                   deleted: m.deleted,
                   createdAt: m.createdAt,
                 })),
+                maps: maps.map((m) => ({
+                  ...m,
+                  combat: m.combat
+                    ? {
+                        ...m.combat,
+                        turnOrder: JSON.parse(m.combat.turnOrder) as string[],
+                      }
+                    : null,
+                })),
               }),
             );
 
             // Broadcast presence to all other participants
             broadcastToRoom(sessionId, { type: "presence_update", presence }, ws);
+          })
+          .catch((err) => {
+            console.error("[ws initial state error]", err);
           });
 
         ws.on("message", async (raw) => {
@@ -353,11 +405,148 @@ export function attachWebSocketServer(server: http.Server): WebSocketServer {
                 break;
               }
 
+              // --- Phase 4: Maps, Tokens & Combat ---
+              case "update_map": {
+                const mapId = typeof payload.mapId === "string" ? payload.mapId : "";
+                const data = (payload.data ?? {}) as Record<string, unknown>;
+                const updated = await updateMap(user.id, mapId, data);
+                broadcastToRoom(sessionId, {
+                  type: "map_updated",
+                  map: {
+                    ...updated,
+                    combat: updated.combat
+                      ? {
+                          ...updated.combat,
+                          turnOrder: JSON.parse(updated.combat.turnOrder) as string[],
+                        }
+                      : null,
+                  },
+                });
+                break;
+              }
+
+              case "place_token": {
+                const mapId = typeof payload.mapId === "string" ? payload.mapId : "";
+                const tokenData = (payload.token ?? {}) as any;
+                const token = await placeToken(user.id, mapId, tokenData);
+                broadcastToRoom(sessionId, {
+                  type: "token_placed",
+                  mapId,
+                  token,
+                });
+                break;
+              }
+
+              case "move_token": {
+                const tokenId = typeof payload.tokenId === "string" ? payload.tokenId : "";
+                const x = typeof payload.x === "number" ? payload.x : undefined;
+                const y = typeof payload.y === "number" ? payload.y : undefined;
+                const token = await moveOrUpdateToken(user.id, tokenId, { x, y });
+                broadcastToRoom(sessionId, {
+                  type: "token_moved",
+                  token,
+                });
+                break;
+              }
+
+              case "update_token": {
+                const tokenId = typeof payload.tokenId === "string" ? payload.tokenId : "";
+                const tokenData = (payload.data ?? {}) as any;
+                const token = await moveOrUpdateToken(user.id, tokenId, tokenData);
+                broadcastToRoom(sessionId, {
+                  type: "token_updated",
+                  token,
+                });
+                break;
+              }
+
+              case "delete_token": {
+                const tokenId = typeof payload.tokenId === "string" ? payload.tokenId : "";
+                await deleteToken(user.id, tokenId);
+                broadcastToRoom(sessionId, {
+                  type: "token_deleted",
+                  tokenId,
+                });
+                break;
+              }
+
+              case "start_combat": {
+                const mapId = typeof payload.mapId === "string" ? payload.mapId : "";
+                const res = await startCombat(user.id, mapId);
+                broadcastToRoom(sessionId, {
+                  type: "combat_started",
+                  mapId,
+                  combat: res.combat,
+                  tokens: res.tokens,
+                });
+                break;
+              }
+
+              case "next_turn": {
+                const mapId = typeof payload.mapId === "string" ? payload.mapId : "";
+                const res = await nextCombatTurn(user.id, mapId);
+                broadcastToRoom(sessionId, {
+                  type: "turn_changed",
+                  mapId,
+                  combat: res,
+                });
+                break;
+              }
+
+              case "combat_attack": {
+                const mapId = typeof payload.mapId === "string" ? payload.mapId : "";
+                const attackerId = typeof payload.attackerId === "string" ? payload.attackerId : "";
+                const targetId = typeof payload.targetId === "string" ? payload.targetId : "";
+                const forcedD20 = typeof payload.forcedD20 === "number" ? payload.forcedD20 : undefined;
+                const res = await executeCombatAttack(user.id, mapId, { attackerId, targetId, forcedD20 });
+
+                broadcastToRoom(sessionId, {
+                  type: "combat_attack",
+                  mapId,
+                  attack: res.attack,
+                  targetToken: res.targetToken,
+                });
+
+                // Broadcast combat log to chat feed
+                broadcastToRoom(sessionId, {
+                  type: "chat_message",
+                  message: {
+                    id: `combat-${Date.now()}`,
+                    sessionId,
+                    userId: user.id,
+                    userName: "Combat Engine",
+                    type: "COMBAT",
+                    content: res.attack.logMessage,
+                    deleted: false,
+                    createdAt: new Date().toISOString(),
+                  },
+                });
+                break;
+              }
+
+              case "end_combat": {
+                const mapId = typeof payload.mapId === "string" ? payload.mapId : "";
+                const res = await endCombat(user.id, mapId);
+                broadcastToRoom(sessionId, {
+                  type: "combat_ended",
+                  mapId,
+                  combat: res,
+                });
+                break;
+              }
+
               default:
                 break;
             }
-          } catch (err) {
+          } catch (err: any) {
             console.error("[ws message error]", err);
+            ws.send(
+              JSON.stringify({
+                type: "error",
+                code: err?.code ?? "ERROR",
+                message: err instanceof Error ? err.message : "Error processing request",
+              }),
+            );
           }
         });
 

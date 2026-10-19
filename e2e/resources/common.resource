@@ -52,13 +52,11 @@ TestID Should Not Be Visible
 
 TestID Text Should Be
     [Arguments]    ${testid}    ${expected}
-    ${text}=    Get Text    css=[data-testid="${testid}"]
-    Should Be Equal As Strings    ${text}    ${expected}
+    Get Text    css=[data-testid="${testid}"]    ==    ${expected}
 
 TestID Text Should Contain
     [Arguments]    ${testid}    ${expected}
-    ${text}=    Get Text    css=[data-testid="${testid}"]
-    Should Contain    ${text}    ${expected}
+    Get Text    css=[data-testid="${testid}"]    contains    ${expected}
 
 Form Error Should Contain
     [Arguments]    ${expected}

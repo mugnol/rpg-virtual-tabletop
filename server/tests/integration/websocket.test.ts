@@ -18,6 +18,10 @@ let seq = 0;
 
 interface TestWs extends WebSocket {
   receivedMessages: Array<Record<string, unknown>>;
+  waiters: Array<{
+    predicate: (msg: Record<string, unknown>) => boolean;
+    resolve: (msg: Record<string, unknown>) => void;
+  }>;
 }
 
 function connectWs(port: number, sessionId: string, token: string): Promise<TestWs> {
@@ -27,10 +31,18 @@ function connectWs(port: number, sessionId: string, token: string): Promise<Test
     }) as TestWs;
 
     ws.receivedMessages = [];
+    ws.waiters = [];
+
     ws.on("message", (raw) => {
       try {
         const parsed = JSON.parse(raw.toString()) as Record<string, unknown>;
-        ws.receivedMessages.push(parsed);
+        const waiterIdx = ws.waiters.findIndex((w) => w.predicate(parsed));
+        if (waiterIdx !== -1) {
+          const [waiter] = ws.waiters.splice(waiterIdx, 1);
+          waiter.resolve(parsed);
+        } else {
+          ws.receivedMessages.push(parsed);
+        }
       } catch {
         // ignore non-json
       }
@@ -53,38 +65,20 @@ function waitForMessage(
   }
 
   return new Promise((resolve, reject) => {
+    const waiter = {
+      predicate,
+      resolve: (msg: Record<string, unknown>) => {
+        clearTimeout(timer);
+        resolve(msg);
+      },
+    };
     const timer = setTimeout(() => {
-      cleanup();
+      const idx = ws.waiters.indexOf(waiter);
+      if (idx !== -1) ws.waiters.splice(idx, 1);
       reject(new Error(`Timed out waiting for WebSocket message after ${timeoutMs}ms. Received: ${JSON.stringify(ws.receivedMessages)}`));
     }, timeoutMs);
 
-    function onMessage(rawData: WebSocket.RawData) {
-      try {
-        const parsed = JSON.parse(rawData.toString()) as Record<string, unknown>;
-        if (predicate(parsed)) {
-          const idx = ws.receivedMessages.lastIndexOf(parsed);
-          if (idx !== -1) ws.receivedMessages.splice(idx, 1);
-          cleanup();
-          resolve(parsed);
-        }
-      } catch {
-        // ignore non-json
-      }
-    }
-
-    function onError(err: Error) {
-      cleanup();
-      reject(err);
-    }
-
-    function cleanup() {
-      clearTimeout(timer);
-      ws.off("message", onMessage);
-      ws.off("error", onError);
-    }
-
-    ws.on("message", onMessage);
-    ws.on("error", onError);
+    ws.waiters.push(waiter);
   });
 }
 

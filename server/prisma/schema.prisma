@@ -28,6 +28,7 @@ model User {
   createdInvites CampaignInvite[]
   sheets         CharacterSheet[]
   messages       SessionMessage[]
+  tokens         MapToken[]       @relation("TokenOwner")
 }
 
 model Campaign {
@@ -104,6 +105,8 @@ model CharacterSheet {
   extras       String   @default("{}")
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
+
+  tokens       MapToken[]
 }
 
 model GameSession {
@@ -119,6 +122,7 @@ model GameSession {
   updatedAt   DateTime @updatedAt
 
   messages    SessionMessage[]
+  maps        SessionMap[]
 }
 
 model SessionMessage {
@@ -132,4 +136,58 @@ model SessionMessage {
   deleted    Boolean     @default(false)
   createdAt  DateTime    @default(now())
 }
+
+model SessionMap {
+  id                  String       @id @default(cuid())
+  sessionId           String
+  session             GameSession  @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  name                String       @default("Dungeon Map")
+  theme               String       @default("stone-dungeon")
+  width               Int          @default(12)
+  height              Int          @default(8)
+  allowPlayerMovement Boolean      @default(false)
+  createdAt           DateTime     @default(now())
+  updatedAt           DateTime     @updatedAt
+
+  tokens              MapToken[]
+  combat              CombatState?
+}
+
+model MapToken {
+  id               String          @id @default(cuid())
+  mapId            String
+  map              SessionMap      @relation(fields: [mapId], references: [id], onDelete: Cascade)
+  type             String          @default("CHARACTER") // CHARACTER | MONSTER | ITEM
+  name             String
+  characterSheetId String?
+  characterSheet   CharacterSheet? @relation(fields: [characterSheetId], references: [id], onDelete: SetNull)
+  ownerId          String?
+  owner            User?           @relation("TokenOwner", fields: [ownerId], references: [id], onDelete: SetNull)
+  x                Int             @default(0)
+  y                Int             @default(0)
+  color            String          @default("#6366f1")
+  hpMax            Int             @default(10)
+  hpCurrent        Int             @default(10)
+  ac               Int             @default(10)
+  speed            Int             @default(6)
+  attackBonus      Int             @default(0)
+  damageFormula    String          @default("1d6")
+  initiative       Int             @default(0)
+  createdAt        DateTime        @default(now())
+  updatedAt        DateTime        @updatedAt
+}
+
+model CombatState {
+  id            String     @id @default(cuid())
+  mapId         String     @unique
+  map           SessionMap @relation(fields: [mapId], references: [id], onDelete: Cascade)
+  active        Boolean    @default(false)
+  round         Int        @default(1)
+  turnIndex     Int        @default(0)
+  activeTokenId String?
+  turnOrder     String     @default("[]")
+  createdAt     DateTime   @default(now())
+  updatedAt     DateTime   @updatedAt
+}
+
 

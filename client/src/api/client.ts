@@ -407,3 +407,122 @@ export function listSessionMessages(sessionId: string): Promise<{ messages: Sess
   return request("GET", `/sessions/${sessionId}/messages`);
 }
 
+export interface MapToken {
+  id: string;
+  mapId: string;
+  type: "CHARACTER" | "MONSTER" | "ITEM";
+  name: string;
+  characterSheetId: string | null;
+  ownerId: string | null;
+  x: number;
+  y: number;
+  color: string;
+  hpMax: number;
+  hpCurrent: number;
+  ac: number;
+  speed: number;
+  attackBonus: number;
+  damageFormula: string;
+  initiative: number;
+}
+
+export interface CombatState {
+  id: string;
+  mapId: string;
+  active: boolean;
+  round: number;
+  turnIndex: number;
+  activeTokenId: string | null;
+  turnOrder: string[];
+}
+
+export interface SessionMap {
+  id: string;
+  sessionId: string;
+  name: string;
+  theme: "stone-dungeon" | "forest-clearing" | "tavern-cellar" | string;
+  width: number;
+  height: number;
+  allowPlayerMovement: boolean;
+  tokens: MapToken[];
+  combat: CombatState | null;
+}
+
+export interface CombatAttackResult {
+  attackerName: string;
+  targetName: string;
+  d20: number;
+  attackBonus: number;
+  attackTotal: number;
+  isCritical: boolean;
+  isFumble: boolean;
+  hit: boolean;
+  targetAc: number;
+  damage: number;
+  damageFormula: string;
+  targetHpBefore: number;
+  targetHpAfter: number;
+  targetHpMax: number;
+  logMessage: string;
+}
+
+export function listSessionMaps(sessionId: string): Promise<{ maps: SessionMap[] }> {
+  return request("GET", `/sessions/${sessionId}/maps`);
+}
+
+export function createSessionMap(
+  sessionId: string,
+  input: { name?: string; theme?: string; width?: number; height?: number; allowPlayerMovement?: boolean },
+): Promise<{ map: SessionMap }> {
+  return request("POST", `/sessions/${sessionId}/maps`, input);
+}
+
+export function getMap(mapId: string): Promise<{ map: SessionMap }> {
+  return request("GET", `/maps/${mapId}`);
+}
+
+export function updateMap(
+  mapId: string,
+  input: { name?: string; theme?: string; width?: number; height?: number; allowPlayerMovement?: boolean },
+): Promise<{ map: SessionMap }> {
+  return request("PATCH", `/maps/${mapId}`, input);
+}
+
+export function placeToken(
+  mapId: string,
+  input: Partial<MapToken>,
+): Promise<{ token: MapToken }> {
+  return request("POST", `/maps/${mapId}/tokens`, input);
+}
+
+export function updateToken(
+  tokenId: string,
+  input: Partial<MapToken>,
+): Promise<{ token: MapToken }> {
+  return request("PATCH", `/tokens/${tokenId}`, input);
+}
+
+export function deleteToken(tokenId: string): Promise<void> {
+  return request("DELETE", `/tokens/${tokenId}`);
+}
+
+export function startCombat(mapId: string): Promise<{ combat: CombatState; tokens: MapToken[] }> {
+  return request("POST", `/maps/${mapId}/combat/start`);
+}
+
+export function nextCombatTurn(mapId: string): Promise<{ combat: CombatState }> {
+  return request("POST", `/maps/${mapId}/combat/next`);
+}
+
+export function executeCombatAttack(
+  mapId: string,
+  input: { attackerId: string; targetId: string; forcedD20?: number },
+): Promise<{ attack: CombatAttackResult; targetToken: MapToken }> {
+  return request("POST", `/maps/${mapId}/combat/attack`, input);
+}
+
+export function endCombat(mapId: string): Promise<{ combat: CombatState }> {
+  return request("POST", `/maps/${mapId}/combat/end`);
+}
+
+

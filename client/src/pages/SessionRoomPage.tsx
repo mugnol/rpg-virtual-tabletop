@@ -2,9 +2,14 @@ import { useEffect, useRef, useState, type FormEvent } from "react";
 import { Link, useParams } from "react-router-dom";
 import {
   getSession,
+  listCampaignSheets,
+  listSessionMaps,
   type DiceRollResult,
   type GameSession,
+  type MapToken,
+  type SessionMap,
   type SessionMessageItem,
+  type SheetSummary,
 } from "../api/client";
 import { useAuth } from "../auth/AuthContext";
 import { FormError } from "../components/FormError";
@@ -30,6 +35,22 @@ export function SessionRoomPage() {
   const [isOwner, setIsOwner] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+
+  // Map and Combat state
+  const [map, setMap] = useState<SessionMap | null>(null);
+  const [campaignSheets, setCampaignSheets] = useState<SheetSummary[]>([]);
+  const [selectedTokenId, setSelectedTokenId] = useState<string | null>(null);
+  const [combatTargetId, setCombatTargetId] = useState<string>("");
+
+  // Token placement modal state
+  const [isAddTokenOpen, setIsAddTokenOpen] = useState(false);
+  const [tokenType, setTokenType] = useState<"CHARACTER" | "MONSTER" | "ITEM">("CHARACTER");
+  const [tokenSheetId, setTokenSheetId] = useState<string>("");
+  const [tokenName, setTokenName] = useState<string>("");
+  const [tokenHp, setTokenHp] = useState<string>("");
+  const [tokenAc, setTokenAc] = useState<string>("");
+  const [tokenAttackBonus, setTokenAttackBonus] = useState<string>("");
+  const [tokenDamage, setTokenDamage] = useState<string>("");
 
   // Chat input
   const [chatInput, setChatInput] = useState("");
@@ -63,7 +84,13 @@ export function SessionRoomPage() {
       .then(({ session: sess }) => {
         if (cancelled) return;
         setSession(sess);
-        // Note: owner status is known once session_state arrives or if user is owner
+        if (sess.campaignId) {
+          listCampaignSheets(sess.campaignId)
+            .then(({ sheets }) => {
+              if (!cancelled) setCampaignSheets(sheets);
+            })
+            .catch(() => {});
+        }
         setLoading(false);
       })
       .catch((err: unknown) => {
@@ -71,6 +98,15 @@ export function SessionRoomPage() {
         setError(err instanceof Error ? err.message : "Failed to load session");
         setLoading(false);
       });
+
+    listSessionMaps(id)
+      .then(({ maps }) => {
+        if (cancelled) return;
+        if (maps.length > 0) {
+          setMap((prev) => prev ?? maps[0]);
+        }
+      })
+      .catch(() => {});
 
     // Establish WebSocket connection
     const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
@@ -86,6 +122,9 @@ export function SessionRoomPage() {
             setSession(payload.session);
             setPresence(payload.presence || []);
             setMessages(payload.messages || []);
+            if (payload.maps && payload.maps.length > 0) {
+              setMap(payload.maps[0]);
+            }
             // Check if current user is owner (GM)
             if (payload.session && user?.role === "GM") {
               setIsOwner(true);
@@ -143,6 +182,95 @@ export function SessionRoomPage() {
             setMessages((prev) =>
               prev.map((m) => (m.id === payload.messageId ? { ...m, deleted: true } : m)),
             );
+            break;
+          }
+
+          case "map_updated": {
+            setMap(payload.map);
+            break;
+          }
+
+          case "token_placed": {
+            setMap((prev) => {
+              if (!prev || prev.id !== payload.mapId) return prev;
+              const exists = prev.tokens.some((t) => t.id === payload.token.id);
+              return {
+                ...prev,
+                tokens: exists
+                  ? prev.tokens.map((t) => (t.id === payload.token.id ? payload.token : t))
+                  : [...prev.tokens, payload.token],
+              };
+            });
+            break;
+          }
+
+          case "token_moved":
+          case "token_updated": {
+            setMap((prev) => {
+              if (!prev) return prev;
+              return {
+                ...prev,
+                tokens: prev.tokens.map((t) => (t.id === payload.token.id ? payload.token : t)),
+              };
+            });
+            break;
+          }
+
+          case "token_deleted": {
+            setMap((prev) => {
+              if (!prev) return prev;
+              return {
+                ...prev,
+                tokens: prev.tokens.filter((t) => t.id !== payload.tokenId),
+              };
+            });
+            break;
+          }
+
+          case "combat_started": {
+            setMap((prev) => {
+              if (!prev || prev.id !== payload.mapId) return prev;
+              return {
+                ...prev,
+                combat: payload.combat,
+                tokens: payload.tokens ?? prev.tokens,
+              };
+            });
+            break;
+          }
+
+          case "turn_changed": {
+            setMap((prev) => {
+              if (!prev || prev.id !== payload.mapId) return prev;
+              return {
+                ...prev,
+                combat: payload.combat,
+              };
+            });
+            break;
+          }
+
+          case "combat_attack": {
+            setMap((prev) => {
+              if (!prev || prev.id !== payload.mapId) return prev;
+              return {
+                ...prev,
+                tokens: prev.tokens.map((t) =>
+                  t.id === payload.targetToken.id ? payload.targetToken : t,
+                ),
+              };
+            });
+            break;
+          }
+
+          case "combat_ended": {
+            setMap((prev) => {
+              if (!prev || prev.id !== payload.mapId) return prev;
+              return {
+                ...prev,
+                combat: null,
+              };
+            });
             break;
           }
 
@@ -227,6 +355,163 @@ export function SessionRoomPage() {
     );
   }
 
+  function handleOpenAddToken() {
+    setIsAddTokenOpen(true);
+    if (session?.campaignId) {
+      listCampaignSheets(session.campaignId)
+        .then(({ sheets }) => setCampaignSheets(sheets))
+        .catch(() => {});
+    }
+  }
+
+  function handleSheetSelect(e: React.ChangeEvent<HTMLSelectElement>) {
+    const sheetId = e.target.value;
+    setTokenSheetId(sheetId);
+    const sheet = campaignSheets.find((s) => s.id === sheetId);
+    if (sheet) {
+      setTokenName(sheet.name);
+    }
+  }
+
+  function handlePlaceTokenSubmit(e: FormEvent) {
+    e.preventDefault();
+    if (!wsRef.current || !map) return;
+
+    if (tokenType === "CHARACTER") {
+      const sheet = campaignSheets.find((s) => s.id === tokenSheetId);
+      wsRef.current.send(
+        JSON.stringify({
+          type: "place_token",
+          mapId: map.id,
+          token: {
+            type: "CHARACTER",
+            characterSheetId: tokenSheetId || undefined,
+            name: sheet?.name || tokenName || "Character",
+          },
+        }),
+      );
+    } else if (tokenType === "MONSTER") {
+      wsRef.current.send(
+        JSON.stringify({
+          type: "place_token",
+          mapId: map.id,
+          token: {
+            type: "MONSTER",
+            name: tokenName || "Monster",
+            hpMax: Number.parseInt(tokenHp, 10) || 10,
+            hpCurrent: Number.parseInt(tokenHp, 10) || 10,
+            ac: Number.parseInt(tokenAc, 10) || 10,
+            attackBonus: Number.parseInt(tokenAttackBonus, 10) || 0,
+            damageFormula: tokenDamage || "1d6",
+          },
+        }),
+      );
+    } else {
+      wsRef.current.send(
+        JSON.stringify({
+          type: "place_token",
+          mapId: map.id,
+          token: {
+            type: "ITEM",
+            name: tokenName || "Item",
+          },
+        }),
+      );
+    }
+
+    setIsAddTokenOpen(false);
+    setTokenName("");
+    setTokenHp("");
+    setTokenAc("");
+    setTokenAttackBonus("");
+    setTokenDamage("");
+    setTokenSheetId("");
+  }
+
+  function handleToggleMovement() {
+    if (!wsRef.current || !map) return;
+    wsRef.current.send(
+      JSON.stringify({
+        type: "update_map",
+        mapId: map.id,
+        data: {
+          allowPlayerMovement: !map.allowPlayerMovement,
+        },
+      }),
+    );
+  }
+
+  function handleTokenClick(token: MapToken) {
+    if (!effectiveIsOwner && !map?.allowPlayerMovement) {
+      return;
+    }
+    if (!effectiveIsOwner && token.ownerId !== user?.id) {
+      return;
+    }
+    setSelectedTokenId((prev) => (prev === token.id ? null : token.id));
+  }
+
+  function handleCellClick(x: number, y: number) {
+    if (!selectedTokenId || !wsRef.current || !map) return;
+    wsRef.current.send(
+      JSON.stringify({
+        type: "move_token",
+        tokenId: selectedTokenId,
+        x,
+        y,
+      }),
+    );
+    setSelectedTokenId(null);
+  }
+
+  function handleStartCombat() {
+    if (!wsRef.current || !map) return;
+    wsRef.current.send(
+      JSON.stringify({
+        type: "start_combat",
+        mapId: map.id,
+      }),
+    );
+  }
+
+  function handleNextTurn() {
+    if (!wsRef.current || !map) return;
+    wsRef.current.send(
+      JSON.stringify({
+        type: "next_turn",
+        mapId: map.id,
+      }),
+    );
+  }
+
+  function handleCombatAttack() {
+    if (!wsRef.current || !map || !map.combat?.activeTokenId) return;
+    const targets = map.tokens.filter(
+      (t) => t.type !== "ITEM",
+    );
+    const target = targets.find((t) => t.id === combatTargetId) || targets.find((t) => t.id !== map.combat?.activeTokenId) || targets[0];
+    if (!target) return;
+
+    wsRef.current.send(
+      JSON.stringify({
+        type: "combat_attack",
+        mapId: map.id,
+        attackerId: map.combat.activeTokenId,
+        targetId: target.id,
+      }),
+    );
+  }
+
+  function handleEndCombat() {
+    if (!wsRef.current || !map) return;
+    wsRef.current.send(
+      JSON.stringify({
+        type: "end_combat",
+        mapId: map.id,
+      }),
+    );
+  }
+
   if (loading) {
     return (
       <main data-testid="page-session" className="page">
@@ -245,6 +530,10 @@ export function SessionRoomPage() {
 
   const effectiveIsOwner = isOwner || user?.role === "GM";
   const visibleMessages = messages.filter((m) => !m.deleted);
+  const activeCombatant = map?.tokens.find((t) => t.id === map?.combat?.activeTokenId);
+  const potentialTargets = map
+    ? map.tokens.filter((t) => t.type !== "ITEM")
+    : [];
 
   return (
     <main data-testid="page-session" className="page session-page">
@@ -359,6 +648,288 @@ export function SessionRoomPage() {
       </div>
 
       <FormError message={error} />
+
+      {/* Map & Combat Section */}
+      {map && (
+        <section className="session-map-container panel">
+          {/* Combat Tracker */}
+          {map.combat?.active && (
+            <div data-testid="combat-tracker" className="combat-tracker">
+              <div className="combat-tracker-header">
+                <h3>⚔️ Combat Encounter — Round {map.combat.round}</h3>
+                <div data-testid="active-turn-indicator" className="active-turn-indicator">
+                  Turn: <strong>{activeCombatant?.name ?? "Active"}</strong>
+                </div>
+              </div>
+              <div className="combat-controls">
+                <label>
+                  Target:{" "}
+                  <select
+                    data-testid="combat-target-select"
+                    value={combatTargetId}
+                    onChange={(e) => setCombatTargetId(e.target.value)}
+                  >
+                    <option value="">-- Select Target --</option>
+                    {potentialTargets.map((t) => (
+                      <option key={t.id} value={t.id}>
+                        {t.name}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <button
+                  data-testid="combat-attack-button"
+                  type="button"
+                  className="btn btn-danger"
+                  onClick={handleCombatAttack}
+                >
+                  ⚔️ Attack
+                </button>
+                <button
+                  data-testid="combat-next-button"
+                  type="button"
+                  className="btn btn-secondary"
+                  onClick={handleNextTurn}
+                >
+                  Next Turn ➔
+                </button>
+                {effectiveIsOwner && (
+                  <button
+                    data-testid="combat-end-button"
+                    type="button"
+                    className="btn btn-outline-danger"
+                    onClick={handleEndCombat}
+                  >
+                    End Combat
+                  </button>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* Map Toolbar */}
+          <div className="map-toolbar">
+            <div className="map-info">
+              <h3>
+                {map.name} ({map.width}x{map.height})
+              </h3>
+            </div>
+            <div className="map-toolbar-actions">
+              {effectiveIsOwner && (
+                <>
+                  <button
+                    data-testid="token-add-button"
+                    type="button"
+                    className="btn btn-primary"
+                    onClick={handleOpenAddToken}
+                  >
+                    + Add Token
+                  </button>
+                  <button
+                    data-testid="allow-movement-toggle"
+                    type="button"
+                    className={`btn ${map.allowPlayerMovement ? "btn-secondary" : "btn-outline-secondary"}`}
+                    onClick={handleToggleMovement}
+                  >
+                    {map.allowPlayerMovement ? "Player Movement: Allowed" : "Player Movement: Locked"}
+                  </button>
+                  {!map.combat?.active && (
+                    <button
+                      data-testid="combat-start-button"
+                      type="button"
+                      className="btn btn-warning"
+                      onClick={handleStartCombat}
+                    >
+                      ⚔️ Start Combat
+                    </button>
+                  )}
+                </>
+              )}
+            </div>
+          </div>
+
+          {/* Map Grid */}
+          <div className="map-board-wrapper">
+            <div
+              data-testid="map-board"
+              className={`map-board theme-${map.theme}`}
+              style={{
+                gridTemplateColumns: `repeat(${map.width}, 48px)`,
+                gridTemplateRows: `repeat(${map.height}, 48px)`,
+              }}
+            >
+              {Array.from({ length: map.height }, (_, y) =>
+                Array.from({ length: map.width }, (_, x) => {
+                  const cellTokens = map.tokens.filter((t) => t.x === x && t.y === y);
+                  return (
+                    <div
+                      key={`${x}-${y}`}
+                      data-testid={`map-cell-${x}-${y}`}
+                      className={`map-cell ${selectedTokenId ? "cell-selectable" : ""}`}
+                      onClick={() => handleCellClick(x, y)}
+                    >
+                      {cellTokens.map((token) => {
+                        const isSelected = selectedTokenId === token.id;
+                        const isTurn = map.combat?.active && map.combat.activeTokenId === token.id;
+                        return (
+                          <div
+                            key={token.id}
+                            className={`map-token token-${token.type.toLowerCase()} ${
+                              isSelected ? "token-selected" : ""
+                            } ${isTurn ? "token-active-turn" : ""}`}
+                            style={{ backgroundColor: token.color || undefined }}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleTokenClick(token);
+                            }}
+                          >
+                            <span data-testid="token-name" className="token-name">
+                              {token.name}
+                            </span>
+                            {token.type !== "ITEM" && (
+                              <span data-testid="token-hp" className="token-hp">
+                                {token.hpCurrent}/{token.hpMax}
+                              </span>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  );
+                }),
+              )}
+            </div>
+          </div>
+        </section>
+      )}
+
+      {/* Place Token Modal */}
+      {isAddTokenOpen && (
+        <div className="modal-overlay" onClick={() => setIsAddTokenOpen(false)}>
+          <div className="modal-card" onClick={(e) => e.stopPropagation()}>
+            <h3>Place Token on Map</h3>
+            <form onSubmit={handlePlaceTokenSubmit}>
+              <div className="form-group">
+                <label>Token Type</label>
+                <select
+                  data-testid="token-type-select"
+                  value={tokenType}
+                  onChange={(e) => setTokenType(e.target.value as any)}
+                >
+                  <option value="CHARACTER">CHARACTER</option>
+                  <option value="MONSTER">MONSTER</option>
+                  <option value="ITEM">ITEM</option>
+                </select>
+              </div>
+
+              {tokenType === "CHARACTER" && (
+                <div className="form-group">
+                  <label>Select Character Sheet</label>
+                  <select
+                    data-testid="token-sheet-select"
+                    value={tokenSheetId}
+                    onChange={handleSheetSelect}
+                  >
+                    <option value="">-- Select Sheet --</option>
+                    {campaignSheets.map((s) => (
+                      <option key={s.id} value={s.id}>
+                        {s.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
+
+              {tokenType === "MONSTER" && (
+                <>
+                  <div className="form-group">
+                    <label>Name</label>
+                    <input
+                      data-testid="token-name-input"
+                      type="text"
+                      value={tokenName}
+                      onChange={(e) => setTokenName(e.target.value)}
+                      placeholder="e.g. Goblin Scout"
+                      required
+                    />
+                  </div>
+                  <div className="form-group">
+                    <label>HP</label>
+                    <input
+                      data-testid="token-hp-input"
+                      type="number"
+                      value={tokenHp}
+                      onChange={(e) => setTokenHp(e.target.value)}
+                      placeholder="e.g. 10"
+                      required
+                    />
+                  </div>
+                  <div className="form-group">
+                    <label>AC</label>
+                    <input
+                      data-testid="token-ac-input"
+                      type="number"
+                      value={tokenAc}
+                      onChange={(e) => setTokenAc(e.target.value)}
+                      placeholder="e.g. 12"
+                      required
+                    />
+                  </div>
+                  <div className="form-group">
+                    <label>Attack Bonus</label>
+                    <input
+                      data-testid="token-attack-bonus-input"
+                      type="number"
+                      value={tokenAttackBonus}
+                      onChange={(e) => setTokenAttackBonus(e.target.value)}
+                      placeholder="e.g. 3"
+                      required
+                    />
+                  </div>
+                  <div className="form-group">
+                    <label>Damage Dice</label>
+                    <input
+                      data-testid="token-damage-input"
+                      type="text"
+                      value={tokenDamage}
+                      onChange={(e) => setTokenDamage(e.target.value)}
+                      placeholder="e.g. 1d6+1"
+                      required
+                    />
+                  </div>
+                </>
+              )}
+
+              {tokenType === "ITEM" && (
+                <div className="form-group">
+                  <label>Item Name</label>
+                  <input
+                    data-testid="token-name-input"
+                    type="text"
+                    value={tokenName}
+                    onChange={(e) => setTokenName(e.target.value)}
+                    placeholder="e.g. Gold Chest"
+                    required
+                  />
+                </div>
+              )}
+
+              <div className="button-row" style={{ marginTop: "1rem" }}>
+                <button data-testid="token-submit-button" type="submit" className="btn btn-primary">
+                  Place Token
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-secondary"
+                  onClick={() => setIsAddTokenOpen(false)}
+                >
+                  Cancel
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
 
       {/* Main Room Layout: Left (Presence + Dice Tray), Right (Chat Stream) */}
       <div className="session-grid">
