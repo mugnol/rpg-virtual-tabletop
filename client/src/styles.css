@@ -1,13 +1,62 @@
 :root {
-  --bg: #1b1e28;
-  --bg-card: #242836;
-  --text: #e6e8ee;
-  --text-dim: #9aa1b2;
-  --accent: #6c5ce7;
-  --accent-hover: #5a4bd1;
-  --danger: #d64545;
-  --danger-hover: #b93a3a;
-  --border: #363c4d;
+  --theme-bg-primary: #181411;
+  --theme-bg-secondary: #26201b;
+  --theme-bg-panel: #302822;
+  --theme-text-primary: #f5ece1;
+  --theme-text-secondary: #b8a898;
+  --theme-accent: #c99a3e;
+  --theme-accent-hover: #dbae53;
+  --theme-danger: #b91c1c;
+  --theme-danger-hover: #991b1b;
+  --theme-border: #4a3e35;
+  --theme-font-sans: 'Cinzel', 'Trajan Pro', Georgia, serif;
+  --theme-font-heading: 'Cinzel Decorative', Georgia, serif;
+  --theme-font-mono: 'Courier Prime', monospace;
+  --theme-border-radius: 6px;
+
+  --bg: var(--theme-bg-primary, #181411);
+  --bg-card: var(--theme-bg-panel, #302822);
+  --panel: var(--theme-bg-panel, #302822);
+  --text: var(--theme-text-primary, #f5ece1);
+  --text-dim: var(--theme-text-secondary, #b8a898);
+  --accent: var(--theme-accent, #c99a3e);
+  --accent-hover: var(--theme-accent-hover, #dbae53);
+  --danger: var(--theme-danger, #b91c1c);
+  --danger-hover: #991b1b;
+  --border: var(--theme-border, #4a3e35);
+  --radius: var(--theme-border-radius, 6px);
+}
+
+html[data-theme="cyberpunk"] {
+  --theme-bg-primary: #050811;
+  --theme-bg-secondary: #0c1322;
+  --theme-bg-panel: #131b2e;
+  --theme-text-primary: #e2f1ff;
+  --theme-text-secondary: #7ea3cc;
+  --theme-accent: #00f0ff;
+  --theme-accent-hover: #3df3ff;
+  --theme-border: #1f2f4d;
+  --theme-danger: #ff0055;
+  --theme-font-sans: 'Rajdhani', -apple-system, sans-serif;
+  --theme-font-heading: 'Orbitron', sans-serif;
+  --theme-font-mono: 'Share Tech Mono', monospace;
+  --theme-border-radius: 2px;
+}
+
+html[data-theme="medieval"] {
+  --theme-bg-primary: #181411;
+  --theme-bg-secondary: #26201b;
+  --theme-bg-panel: #302822;
+  --theme-text-primary: #f5ece1;
+  --theme-text-secondary: #b8a898;
+  --theme-accent: #c99a3e;
+  --theme-accent-hover: #dbae53;
+  --theme-border: #4a3e35;
+  --theme-danger: #b91c1c;
+  --theme-font-sans: 'Cinzel', 'Trajan Pro', Georgia, serif;
+  --theme-font-heading: 'Cinzel Decorative', Georgia, serif;
+  --theme-font-mono: 'Courier Prime', monospace;
+  --theme-border-radius: 6px;
 }
 
 * {
@@ -16,9 +65,13 @@
 
 body {
   margin: 0;
-  font-family: "Segoe UI", system-ui, -apple-system, sans-serif;
+  font-family: var(--theme-font-sans, "Segoe UI", system-ui, -apple-system, sans-serif);
   background: var(--bg);
   color: var(--text);
+}
+
+h1, h2, h3, h4, h5, h6 {
+  font-family: var(--theme-font-heading, var(--theme-font-sans, inherit));
 }
 
 a {
@@ -865,5 +918,39 @@ a {
   max-width: 480px;
   box-shadow: 0 12px 32px rgba(0, 0, 0, 0.6);
 }
+
+/* Phase 5: Themes & Nav Selectors */
+.nav-selectors {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-left: auto;
+}
+
+.select-compact {
+  padding: 0.3rem 0.6rem;
+  font-size: 0.85rem;
+  background: var(--bg);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: var(--radius, 4px);
+  cursor: pointer;
+}
+
+.theme-card-active {
+  border-color: var(--accent) !important;
+  box-shadow: 0 0 10px var(--accent) !important;
+}
+
+.theme-name {
+  font-size: 1.1rem;
+}
+
+.theme-description {
+  margin: 0.5rem 0 0;
+  color: var(--text-dim);
+  font-size: 0.9rem;
+}
+
 
 

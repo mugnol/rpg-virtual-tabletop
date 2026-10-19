@@ -1,0 +1,25 @@
+{
+  "key": "medieval",
+  "name": "Medieval",
+  "description": "Warm parchment and dark tavern aesthetic with aged gold accents",
+  "colors": {
+    "bgPrimary": "#181411",
+    "bgSecondary": "#26201b",
+    "bgPanel": "#302822",
+    "textPrimary": "#f5ece1",
+    "textSecondary": "#b8a898",
+    "accent": "#c99a3e",
+    "accentHover": "#dbae53",
+    "border": "#4a3e35",
+    "danger": "#b91c1c"
+  },
+  "typography": {
+    "fontFamilySans": "'Cinzel', 'Trajan Pro', Georgia, serif",
+    "fontFamilyHeading": "'Cinzel Decorative', Georgia, serif",
+    "fontFamilyMono": "'Courier Prime', monospace"
+  },
+  "borderRadius": "6px",
+  "customProperties": {
+    "glow": "0 0 10px rgba(201, 154, 62, 0.2)"
+  }
+}

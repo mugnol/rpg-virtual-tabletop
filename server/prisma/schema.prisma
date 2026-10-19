@@ -19,8 +19,10 @@ model User {
   displayName  String
   // "GM" | "PLAYER" — validated in the app layer (Zod), not by the DB,
   // to keep the schema portable across SQLite/PostgreSQL.
-  role         String
-  createdAt    DateTime @default(now())
+  role            String
+  preferredTheme  String   @default("medieval")
+  preferredLocale String   @default("en")
+  createdAt       DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
   ownedCampaigns Campaign[]
@@ -189,5 +191,16 @@ model CombatState {
   createdAt     DateTime   @default(now())
   updatedAt     DateTime   @updatedAt
 }
+
+model ThemeConfig {
+  key         String   @id
+  name        String
+  description String   @default("")
+  builtin     Boolean  @default(false)
+  config      String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
 
 

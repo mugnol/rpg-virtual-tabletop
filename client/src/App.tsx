@@ -7,6 +7,7 @@ import { RegisterPage } from "./pages/RegisterPage";
 import { SheetPage } from "./pages/SheetPage";
 import { SessionRoomPage } from "./pages/SessionRoomPage";
 import { SystemsPage } from "./pages/SystemsPage";
+import { ThemesPage } from "./pages/ThemesPage";
 
 export function App() {
   return (
@@ -40,6 +41,14 @@ export function App() {
         element={
           <RequireAuth>
             <SystemsPage />
+          </RequireAuth>
+        }
+      />
+      <Route
+        path="/themes"
+        element={
+          <RequireAuth>
+            <ThemesPage />
           </RequireAuth>
         }
       />

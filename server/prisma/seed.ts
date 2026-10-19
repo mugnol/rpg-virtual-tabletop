@@ -1,11 +1,13 @@
 import { PrismaClient } from "@prisma/client";
 import bcrypt from "bcryptjs";
 import { seedBuiltinSystems } from "../src/rules/builtin.js";
+import { seedBuiltinThemes } from "../src/modules/themes/service.js";
 
 const prisma = new PrismaClient();
 
 async function main() {
   await seedBuiltinSystems(prisma);
+  await seedBuiltinThemes(prisma);
 
   const passwordHash = await bcrypt.hash("password123", 10);
 
