@@ -1,0 +1,67 @@
+name: CI
+
+on:
+  push:
+    branches: [ main, 'feat/**' ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  test-and-build:
+    name: Typecheck, Test, and Build
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: vtt
+          POSTGRES_PASSWORD: vttpassword
+          POSTGRES_DB: vtt_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+
+      - name: Setup Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install Node dependencies
+        run: npm ci
+
+      - name: Typecheck Backend and Frontend
+        run: npm run typecheck
+
+      - name: Run Backend Vitest Suite
+        run: npm test
+        env:
+          DATABASE_URL: "file:./test.db"
+          JWT_SECRET: "ci-test-jwt-secret-key-32-chars-long"
+
+      - name: Build Backend & Frontend
+        run: npm run build
+
+      - name: Setup Python Environment and Robot Framework
+        run: |
+          python -m venv .venv
+          . .venv/bin/activate
+          pip install -r e2e/requirements.txt
+          rfbrowser init
+
+      - name: Run E2E Acceptance Tests (Robot Framework + Playwright)
+        run: npm run test:e2e
