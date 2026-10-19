@@ -18,11 +18,8 @@ if (!jwtSecret) {
   }
 }
 
-const cookieSecureEnv = process.env.COOKIE_SECURE;
-const cookieSecure =
-  cookieSecureEnv !== undefined
-    ? cookieSecureEnv !== "0" && cookieSecureEnv.toLowerCase() !== "false"
-    : isProd;
+const cookieSecureEnv = process.env.COOKIE_SECURE?.trim().toLowerCase();
+const cookieSecure = cookieSecureEnv === "true" || cookieSecureEnv === "1";
 
 export const config = {
   nodeEnv,
