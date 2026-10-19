@@ -1,10 +1,15 @@
+import http from "node:http";
 import { createApp } from "./app.js";
 import { config } from "./config.js";
 import { prisma } from "./db.js";
+import { attachWebSocketServer } from "./websocket/server.js";
 
 const app = createApp();
+const server = http.createServer(app);
 
-app.listen(config.port, async () => {
+attachWebSocketServer(server);
+
+server.listen(config.port, async () => {
   console.log(
     `[server] RPG Virtual Tabletop listening on http://localhost:${config.port} (env: ${config.nodeEnv})`,
   );

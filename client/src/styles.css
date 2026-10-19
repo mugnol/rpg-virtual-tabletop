@@ -367,3 +367,279 @@ a {
   text-transform: uppercase;
   color: var(--text-dim);
 }
+
+/* Session Room Styles */
+.status-scheduled {
+  background: #334155;
+  color: #94a3b8;
+}
+
+.status-active {
+  background: #065f46;
+  color: #6ee7b7;
+}
+
+.status-paused {
+  background: #854d0e;
+  color: #fde047;
+}
+
+.status-ended {
+  background: #7f1d1d;
+  color: #fca5a5;
+}
+
+.session-header {
+  margin-bottom: 1rem;
+}
+
+.session-grid {
+  display: grid;
+  grid-template-columns: 320px 1fr;
+  gap: 1.25rem;
+  align-items: start;
+}
+
+@media (max-width: 800px) {
+  .session-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.session-sidebar {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.presence-list {
+  list-style: none;
+  padding: 0;
+  margin: 0.5rem 0 0 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.presence-user {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.9rem;
+}
+
+.presence-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #10b981;
+  display: inline-block;
+}
+
+.dice-tray {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.dice-selector {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+
+.dice-btn {
+  padding: 0.35rem 0.65rem;
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
+.dice-controls-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.5rem;
+}
+
+.dice-controls-grid label,
+.dice-tray label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  font-size: 0.85rem;
+  color: var(--text-dim);
+}
+
+.dice-controls-grid input,
+.dice-tray input {
+  padding: 0.45rem 0.6rem;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--text);
+  font-size: 0.9rem;
+}
+
+.dice-roll-action {
+  margin-top: 0.25rem;
+  width: 100%;
+  font-weight: 600;
+}
+
+/* Chat Styles */
+.session-chat-panel {
+  display: flex;
+  flex-direction: column;
+  height: 600px;
+}
+
+.chat-stream {
+  flex: 1;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  padding-right: 0.5rem;
+  margin: 0.5rem 0 1rem 0;
+}
+
+.chat-message {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 0.5rem 0.75rem;
+}
+
+.chat-message-dice {
+  border-left: 3px solid #6366f1;
+  background: #1e1b4b1a;
+}
+
+.chat-header {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.25rem;
+}
+
+.chat-author {
+  font-size: 0.85rem;
+  color: #818cf8;
+}
+
+.chat-timestamp {
+  font-size: 0.75rem;
+  color: var(--text-dim);
+  margin-left: auto;
+}
+
+.chat-delete-btn {
+  padding: 0.1rem 0.35rem;
+  font-size: 0.7rem;
+  line-height: 1;
+  border-radius: 4px;
+}
+
+.chat-content {
+  font-size: 0.95rem;
+  word-break: break-word;
+}
+
+.dice-content {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.dice-roll-label {
+  font-size: 0.8rem;
+  color: #a5b4fc;
+  font-style: italic;
+}
+
+.dice-roll-summary {
+  font-family: monospace;
+  font-size: 0.95rem;
+}
+
+.dice-total-highlight {
+  font-size: 1.1rem;
+  font-weight: bold;
+  color: #f59e0b;
+}
+
+.chat-input-bar {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.chat-input-bar input {
+  flex: 1;
+  padding: 0.6rem 0.8rem;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--text);
+  font-size: 0.95rem;
+}
+
+/* Visual Dice Roll Animation Overlay */
+.dice-animation-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.65);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  animation: fadeIn 0.2s ease-out;
+}
+
+.dice-modal {
+  background: var(--panel);
+  border: 2px solid #6366f1;
+  border-radius: 12px;
+  padding: 2rem;
+  min-width: 300px;
+  text-align: center;
+  box-shadow: 0 12px 36px rgba(0, 0, 0, 0.5);
+}
+
+.dice-spinner {
+  font-size: 3rem;
+  animation: rollBounce 0.8s ease-in-out;
+}
+
+@keyframes rollBounce {
+  0% { transform: rotate(0deg) scale(0.5); opacity: 0; }
+  50% { transform: rotate(360deg) scale(1.2); }
+  100% { transform: rotate(720deg) scale(1); opacity: 1; }
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.dice-roller-name {
+  font-size: 0.9rem;
+  color: var(--text-dim);
+  margin-top: 0.5rem;
+}
+
+.dice-roll-total {
+  font-size: 3rem;
+  font-weight: 800;
+  color: #f59e0b;
+  margin: 0.5rem 0;
+  font-family: monospace;
+}
+
+.dice-roll-breakdown {
+  font-size: 1rem;
+  font-family: monospace;
+  color: #cbd5e1;
+}
+

@@ -27,6 +27,7 @@ model User {
   memberships    CampaignMember[]
   createdInvites CampaignInvite[]
   sheets         CharacterSheet[]
+  messages       SessionMessage[]
 }
 
 model Campaign {
@@ -40,9 +41,10 @@ model Campaign {
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
-  members CampaignMember[]
-  invites CampaignInvite[]
-  sheets  CharacterSheet[]
+  members  CampaignMember[]
+  invites  CampaignInvite[]
+  sheets   CharacterSheet[]
+  sessions GameSession[]
 }
 
 model CampaignMember {
@@ -103,3 +105,31 @@ model CharacterSheet {
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 }
+
+model GameSession {
+  id          String   @id @default(cuid())
+  campaignId  String
+  campaign    Campaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  name        String
+  description String   @default("")
+  status      String   @default("SCHEDULED")
+  startedAt   DateTime?
+  endedAt     DateTime?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  messages    SessionMessage[]
+}
+
+model SessionMessage {
+  id         String      @id @default(cuid())
+  sessionId  String
+  session    GameSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  userId     String?
+  user       User?       @relation(fields: [userId], references: [id], onDelete: SetNull)
+  type       String      @default("TEXT")
+  content    String
+  deleted    Boolean     @default(false)
+  createdAt  DateTime    @default(now())
+}
+

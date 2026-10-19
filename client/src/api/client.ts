@@ -345,3 +345,65 @@ export function levelUpSheet(id: string): Promise<{ sheet: SheetDetail }> {
 export function deleteSheet(id: string): Promise<void> {
   return request("DELETE", `/sheets/${id}`);
 }
+
+export interface GameSession {
+  id: string;
+  campaignId: string;
+  name: string;
+  description: string;
+  status: "SCHEDULED" | "ACTIVE" | "PAUSED" | "ENDED";
+  startedAt: string | null;
+  endedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface SessionMessageItem {
+  id: string;
+  sessionId: string;
+  userId: string | null;
+  userName: string;
+  type: "TEXT" | "DICE" | "SYSTEM";
+  content: string;
+  deleted: boolean;
+  createdAt: string;
+}
+
+export interface DiceRollResult {
+  formula: string;
+  label?: string;
+  dice: number[];
+  modifier: number;
+  total: number;
+}
+
+export function listCampaignSessions(campaignId: string): Promise<{ sessions: GameSession[] }> {
+  return request("GET", `/campaigns/${campaignId}/sessions`);
+}
+
+export function createSession(
+  campaignId: string,
+  input: { name: string; description?: string },
+): Promise<{ session: GameSession }> {
+  return request("POST", `/campaigns/${campaignId}/sessions`, input);
+}
+
+export function getSession(sessionId: string): Promise<{ session: GameSession }> {
+  return request("GET", `/sessions/${sessionId}`);
+}
+
+export function updateSession(
+  sessionId: string,
+  input: { name?: string; description?: string; status?: "SCHEDULED" | "ACTIVE" | "PAUSED" | "ENDED" },
+): Promise<{ session: GameSession }> {
+  return request("PATCH", `/sessions/${sessionId}`, input);
+}
+
+export function deleteSession(sessionId: string): Promise<void> {
+  return request("DELETE", `/sessions/${sessionId}`);
+}
+
+export function listSessionMessages(sessionId: string): Promise<{ messages: SessionMessageItem[] }> {
+  return request("GET", `/sessions/${sessionId}/messages`);
+}
+

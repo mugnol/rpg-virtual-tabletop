@@ -1,6 +1,7 @@
 import { Router } from "express";
 import { asyncHandler, parseBody } from "../../lib/http.js";
 import { requireAuth, requireRole } from "../../middleware/auth.js";
+import { campaignSessionsRouter } from "../sessions/routes.js";
 import { campaignSheetsRouter } from "../sheets/routes.js";
 import {
   campaignCreateSchema,
@@ -77,3 +78,4 @@ campaignsRouter.post(
 );
 
 campaignsRouter.use("/:id/sheets", campaignSheetsRouter);
+campaignsRouter.use("/:id/sessions", campaignSessionsRouter);

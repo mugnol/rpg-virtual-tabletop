@@ -2,14 +2,17 @@ import { useCallback, useEffect, useState, type FormEvent } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import {
   createInvite,
+  createSession,
   createSheet,
   deleteCampaign,
   getCampaign,
   getSystem,
+  listCampaignSessions,
   listCampaignSheets,
   listSystems,
   updateCampaign,
   type CampaignDetail,
+  type GameSession,
   type SheetSummary,
   type SystemConfig,
   type SystemSummary,
@@ -125,6 +128,7 @@ export function CampaignDetailPage() {
           onDeleted={() => navigate("/")}
         />
       )}
+      <SessionsSection campaign={campaign} isOwner={isOwner} />
       {campaign.system && campaign.system !== "generic" && (
         <SheetsSection campaign={campaign} isOwner={isOwner} />
       )}
@@ -140,6 +144,131 @@ export function CampaignDetailPage() {
       </section>
       {isOwner && <InviteSection campaign={campaign} onInviteCreated={setCampaign} />}
     </main>
+  );
+}
+
+function SessionsSection({
+  campaign,
+  isOwner,
+}: {
+  campaign: CampaignDetail;
+  isOwner: boolean;
+}) {
+  const [sessions, setSessions] = useState<GameSession[]>([]);
+  const [creating, setCreating] = useState(false);
+  const [name, setName] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  const [submitting, setSubmitting] = useState(false);
+
+  const loadSessions = useCallback(() => {
+    listCampaignSessions(campaign.id)
+      .then(({ sessions: list }) => setSessions(list))
+      .catch((err: unknown) => {
+        setError(err instanceof Error ? err.message : "Failed to load sessions");
+      });
+  }, [campaign.id]);
+
+  useEffect(() => {
+    loadSessions();
+  }, [loadSessions]);
+
+  async function handleCreate(e: FormEvent) {
+    e.preventDefault();
+    setError(null);
+    if (!name.trim()) {
+      setError("Session name is required");
+      return;
+    }
+    setSubmitting(true);
+    try {
+      await createSession(campaign.id, { name: name.trim() });
+      setName("");
+      setCreating(false);
+      loadSessions();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to create session");
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  return (
+    <section data-testid="sessions-section" className="panel">
+      <h2>Game Sessions</h2>
+      {isOwner && (
+        <div className="button-row">
+          <button
+            data-testid="session-create-button"
+            type="button"
+            className="btn btn-primary"
+            onClick={() => setCreating((prev) => !prev)}
+          >
+            New session
+          </button>
+        </div>
+      )}
+      <FormError message={error} />
+      {creating && (
+        <form className="card form" onSubmit={handleCreate}>
+          <h3>Create New Session</h3>
+          <label>
+            Session Name
+            <input
+              data-testid="session-name-input"
+              type="text"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              placeholder="e.g. Session 1: Into the Ruins"
+            />
+          </label>
+          <div className="button-row">
+            <button
+              data-testid="session-create-submit"
+              type="submit"
+              className="btn btn-primary"
+              disabled={submitting}
+            >
+              Create Session
+            </button>
+            <button
+              type="button"
+              className="btn btn-secondary"
+              onClick={() => setCreating(false)}
+            >
+              Cancel
+            </button>
+          </div>
+        </form>
+      )}
+      {sessions.length === 0 ? (
+        <p className="empty-state" style={{ marginTop: "0.75rem" }}>
+          No game sessions yet.
+        </p>
+      ) : (
+        <ul data-testid="session-list" className="campaign-list">
+          {sessions.map((s) => (
+            <li key={s.id}>
+              <Link
+                data-testid="session-item"
+                className="campaign-item"
+                to={`/sessions/${s.id}`}
+              >
+                <span
+                  data-testid="session-status-badge"
+                  className={`badge status-${s.status.toLowerCase()}`}
+                >
+                  {s.status}
+                </span>
+                <span className="campaign-item-name">{s.name}</span>
+                {s.description && (
+                  <span className="campaign-item-system">{s.description}</span>
+                )}
+              </Link>
+            </li>
+          ))}
+        </ul>
+      )}
+    </section>
   );
 }
 

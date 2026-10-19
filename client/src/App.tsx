@@ -5,6 +5,7 @@ import { DashboardPage } from "./pages/DashboardPage";
 import { LoginPage } from "./pages/LoginPage";
 import { RegisterPage } from "./pages/RegisterPage";
 import { SheetPage } from "./pages/SheetPage";
+import { SessionRoomPage } from "./pages/SessionRoomPage";
 import { SystemsPage } from "./pages/SystemsPage";
 
 export function App() {
@@ -55,6 +56,14 @@ export function App() {
         element={
           <RequireAuth>
             <SheetPage />
+          </RequireAuth>
+        }
+      />
+      <Route
+        path="/sessions/:id"
+        element={
+          <RequireAuth>
+            <SessionRoomPage />
           </RequireAuth>
         }
       />
