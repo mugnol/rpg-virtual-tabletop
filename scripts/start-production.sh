@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Start the unified production server completely detached (no hanging pipes).
+# Start the unified production server and port 80 forwarder detached.
 # Logs are written to /tmp/rpg-vtt.log and process ID is saved in server.pid.
 
 set -euo pipefail
@@ -7,6 +7,7 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 
 PID_FILE="server.pid"
+FORWARD_PID_FILE="forward80.pid"
 LOG_FILE="/tmp/rpg-vtt.log"
 
 if [ -f "$PID_FILE" ]; then
@@ -17,6 +18,15 @@ if [ -f "$PID_FILE" ]; then
     sleep 2
   fi
   rm -f "$PID_FILE"
+fi
+
+if [ -f "$FORWARD_PID_FILE" ]; then
+  OLD_FWD_PID=$(cat "$FORWARD_PID_FILE" 2>/dev/null || true)
+  if [ -n "$OLD_FWD_PID" ] && sudo kill -0 "$OLD_FWD_PID" 2>/dev/null; then
+    echo "Stopping existing port 80 forwarder ($OLD_FWD_PID)..."
+    sudo kill "$OLD_FWD_PID" 2>/dev/null || true
+  fi
+  rm -f "$FORWARD_PID_FILE"
 fi
 
 export NODE_ENV="production"
@@ -37,12 +47,25 @@ echo "Server started with PID ${SERVER_PID}. Waiting for health check..."
 for i in $(seq 1 30); do
   if curl -sf "http://127.0.0.1:${PORT}/api/health" >/dev/null 2>&1; then
     echo "Server is healthy on http://${HOST}:${PORT} (PID ${SERVER_PID})!"
-    exit 0
+    break
   fi
   sleep 1
 done
 
-echo "Error: Server failed to start or did not become healthy within 30 seconds." >&2
-echo "Last 20 log lines from ${LOG_FILE}:" >&2
-tail -n 20 "$LOG_FILE" >&2
-exit 1
+if ! curl -sf "http://127.0.0.1:${PORT}/api/health" >/dev/null 2>&1; then
+  echo "Error: Server failed to start or did not become healthy within 30 seconds." >&2
+  echo "Last 20 log lines from ${LOG_FILE}:" >&2
+  tail -n 20 "$LOG_FILE" >&2
+  exit 1
+fi
+
+# Start transparent port 80 proxy so user can access via http://<IP> or http://<IP>:3001
+if [ -f "scripts/forward-80.cjs" ]; then
+  sudo pkill -f "scripts/forward-80.cjs" 2>/dev/null || true
+  nohup setsid sudo node "$PWD/scripts/forward-80.cjs" > /tmp/rpg-forward80.log 2>&1 < /dev/null &
+  sleep 1
+  pgrep -f "scripts/forward-80.cjs" | head -n 1 > "$FORWARD_PID_FILE"
+  echo "Port 80 forwarder running (http://${HOST}:80 -> :3001)."
+fi
+
+exit 0

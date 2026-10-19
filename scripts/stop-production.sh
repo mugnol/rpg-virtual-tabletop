@@ -1,11 +1,21 @@
 #!/usr/bin/env bash
-# Stop the background production server.
+# Stop the background production server and port 80 forwarder.
 
 set -euo pipefail
 
 cd "$(dirname "$0")/.."
 
 PID_FILE="server.pid"
+FORWARD_PID_FILE="forward80.pid"
+
+if [ -f "$FORWARD_PID_FILE" ]; then
+  FWD_PID=$(cat "$FORWARD_PID_FILE" 2>/dev/null || true)
+  if [ -n "$FWD_PID" ] && sudo kill -0 "$FWD_PID" 2>/dev/null; then
+    echo "Stopping port 80 forwarder ($FWD_PID)..."
+    sudo kill "$FWD_PID" 2>/dev/null || true
+  fi
+  rm -f "$FORWARD_PID_FILE"
+fi
 
 if [ -f "$PID_FILE" ]; then
   PID=$(cat "$PID_FILE" 2>/dev/null || true)
