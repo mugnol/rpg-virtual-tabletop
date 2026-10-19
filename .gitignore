@@ -28,3 +28,4 @@ browser/
 # OS / editor noise
 .DS_Store
 *.log
+*.pid

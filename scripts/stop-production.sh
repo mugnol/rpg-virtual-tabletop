@@ -1,0 +1,32 @@
+#!/usr/bin/env bash
+# Stop the background production server.
+
+set -euo pipefail
+
+cd "$(dirname "$0")/.."
+
+PID_FILE="server.pid"
+
+if [ -f "$PID_FILE" ]; then
+  PID=$(cat "$PID_FILE" 2>/dev/null || true)
+  if [ -n "$PID" ] && kill -0 "$PID" 2>/dev/null; then
+    echo "Stopping server process ($PID)..."
+    kill "$PID" 2>/dev/null || true
+    for _ in $(seq 1 10); do
+      if ! kill -0 "$PID" 2>/dev/null; then
+        break
+      fi
+      sleep 1
+    done
+    if kill -0 "$PID" 2>/dev/null; then
+      echo "Force killing server process ($PID)..."
+      kill -9 "$PID" 2>/dev/null || true
+    fi
+    echo "Server stopped."
+  else
+    echo "Process $PID is not running."
+  fi
+  rm -f "$PID_FILE"
+else
+  echo "No server.pid file found."
+fi
