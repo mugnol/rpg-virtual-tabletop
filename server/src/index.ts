@@ -9,9 +9,9 @@ const server = http.createServer(app);
 
 attachWebSocketServer(server);
 
-server.listen(config.port, async () => {
+server.listen(config.port, config.host, async () => {
   console.log(
-    `[server] RPG Virtual Tabletop listening on http://localhost:${config.port} (env: ${config.nodeEnv})`,
+    `[server] RPG Virtual Tabletop listening on http://${config.host}:${config.port} (env: ${config.nodeEnv})`,
   );
   try {
     const count = await prisma.systemConfig.count();

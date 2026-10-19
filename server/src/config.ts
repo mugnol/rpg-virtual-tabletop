@@ -26,6 +26,7 @@ export const config = {
   isProd,
   isTest,
   port: Number(process.env.PORT ?? 3001),
+  host: process.env.HOST ?? "0.0.0.0",
   databaseUrl: process.env.DATABASE_URL ?? "file:./dev.db",
   jwtSecret,
   cookieName: "rpg_session",
