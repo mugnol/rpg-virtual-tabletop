@@ -23,7 +23,7 @@ fi
 export DATABASE_URL="${DATABASE_URL:-file:./prod.db}"
 
 # --- Deploy ---
-npm install          # devDeps (prisma, tsx) are needed for db:push/db:seed
+npm install --include=dev   # NODE_ENV=production is set, force devDeps for build
 npm run build        # tsc + vite build
 npm run db:push      # ensure schema (no-op after first run)
 npm run db:seed      # seed built-in systems/themes (idempotent upserts)
