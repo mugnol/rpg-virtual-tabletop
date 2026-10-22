@@ -95,11 +95,40 @@ Only mechanical facts (ability names, formulas, numeric tables, option lists)
 are encoded. No rulebook prose is reproduced anywhere in configurations,
 tests, or fixtures.
 
-## 7. Out of Scope (Phase 2)
+## 7. Shadowdark RPG Complete Core Rules Parity
 
-- Point-buy calculator UI (config may declare point buy; UI lands later).
-- Rolling on talent tables, weapon mastery mechanics, feats/class features
-  beyond hit die & spellcasting counts.
-- Spell/compendium content (the catalog of spells themselves); sheets store
-  known-spell *names* as free text, optionally count-limited per config.
-- System deletion/version management UI; multi-system campaigns.
+Using the **Shadowdark RPG Core Rulebook (V4-7)** and **Shadowdarklings (`shadowdarklings.net`)** as the single source of truth, the `shadowdark` system and rules engine implement complete support for:
+
+1. **Core Stats & Modifiers (pg. 15)**:
+   - 6 Stats (`STR`, `DEX`, `CON`, `INT`, `WIS`, `CHA`), rolled `3d6` in order with optional re-roll (mulligan) if no stat is `14+`.
+   - Exact modifier mapping: `1-3 (-4)`, `4-5 (-3)`, `6-7 (-2)`, `8-9 (-1)`, `10-11 (0)`, `12-13 (+1)`, `14-15 (+2)`, `16-17 (+3)`, `18+ (+4)`.
+2. **Starting Levels: Level 0 (The Gauntlet) & Level 1 (pgs. 14, 33, 40–41, 116)**:
+   - **0-Level Characters**: Start with HP = `max(1, CON mod)` (+2 for Dwarf *Stout*), no class (can wield all weapons and armor until 1st level), and `1d4` items from the Starting Gear d12 table. 0-level PCs who drop to 0 HP die instantly. Surviving 0-level characters graduate to 1st level.
+   - **1st-Level Characters**: Start with HP = `max(1, Class Hit Die + CON mod)` (+2 for Dwarf *Stout*), 1 class talent roll (+1 for Human *Ambitious*), and `2d6 × 5` gp (or the random 1st-level gear pack: crawling kit, 1 weapon, leather armor if wearable, and 5 gp).
+3. **All 6 Core Ancestries (pgs. 16–17)**:
+   - `Dwarf`: Common + Dwarvish; *Stout* (+2 starting HP, roll HP gains per level with advantage).
+   - `Elf`: Common, Elvish, Sylvan; *Farsight* (+1 ranged weapon attacks OR +1 spellcasting checks).
+   - `Goblin`: Common + Goblin; *Keen Senses* (cannot be surprised).
+   - `Half-Orc`: Common + Orcish; *Mighty* (+1 attack and damage rolls with melee weapons).
+   - `Halfling`: Common; *Stealthy* (1/day invisible for 3 rounds).
+   - `Human`: Common + 1 extra Common language; *Ambitious* (+1 additional talent roll at 1st level).
+4. **All 4 Classes, Talents, Titles, Deities, Backgrounds & Progression (pgs. 18–32, 38–39)**:
+   - `Fighter`: `1d8` HP/lvl, all weapons/armor/shields, *Hauler* (+positive CON mod to gear slots), *Weapon Mastery* (`+1 + floor(level/2)` attack/damage with chosen weapon), *Grit* (STR or DEX advantage), 2d6 Fighter Talents table.
+   - `Priest`: `1d6` HP/lvl, club/crossbow/dagger/mace/longsword/staff/warhammer, all armor/shields, Celestial/Diabolic/Primordial language, free *Turn Undead* spell, Deity & 0-slot Holy Symbol, WIS Spellcasting, Priest Spells Known table (Levels 1–10, Tiers 1–5), 2d6 Priest Talents table.
+   - `Thief`: `1d4` HP/lvl, club/crossbow/dagger/shortbow/shortsword, leather armor/mithral chainmail, *Backstab* (`+1 + floor(level/2)` extra weapon dice on unaware targets), *Thievery* (0-slot tools, advantage on climbing, sneaking/hiding, disguises, traps, delicate tasks), 2d6 Thief Talents table.
+   - `Wizard`: `1d4` HP/lvl, dagger/staff, no armor, 2 extra Common + 2 Rare languages, *Learning Spells* from scroll (1 day, DC 15 INT check, expends scroll), INT Spellcasting, Wizard Spells Known table (Levels 1–10, Tiers 1–5), 2d6 Wizard Talents table.
+   - All 20 Backgrounds (pg. 26), 3 Alignments (`Lawful`, `Neutral`, `Chaotic`), 9 Deities (pgs. 28–29), Alignment/Level/Class Titles (pgs. 30–31), 10 Common & 4 Rare Languages (pg. 32), d20 Ancestry Character Names (pg. 38), and XP advancement (`Current Level × 10 XP`, resets to 0 on advance, talent rolls at levels 1, 3, 5, 7, 9).
+5. **Gear Slots, Basic Gear, Crawling Kit, Armor & Weapons (pgs. 34–37)**:
+   - Gear slots = `max(10, STR)` (+ positive CON mod for Fighter *Hauler*). First backpack free (0 slots), first 100 coins free, stackable item rules (Arrows 20/slot, Crossbow bolts 20/slot, Iron spikes 10/slot, Rations 3/slot, Gems 10/slot), Crawling Kit (7 gp, 7 slots).
+   - Complete Armor Table (Leather, Chainmail, Plate mail, Shield, Mithral modifier) and all 15 Weapons with cost, type (`M`, `R`, `M/R`), range (`C`, `N`, `F`), damage, gear slots (2 slots for Bastard sword, Greataxe, Greatsword), and properties (`F`, `L`, `Th`, `2H`, `V`).
+6. **Magic, Focus, Criticals, Penance & Wizard Mishap Tables (pgs. 44–73)**:
+   - Spellcasting check `1d20 + INT/WIS mod + bonuses` vs `DC 10 + Spell Tier`.
+   - Critical Success (Nat 20 doubles one numerical effect) and Critical Failure (Nat 1 ends focus; Priest triggers Deity Penance with Sacrifice Value table Tier 1=5gp, T2=20gp, T3=40gp, T4=90gp, T5=150gp; Wizard loses spell until rest and rolls on Tier 1–2, Tier 3–4, or Tier 5 Wizard Mishap d12 tables).
+   - Focus spell maintenance checks, Scroll & Wand rules (pg. 49), and full Priest & Wizard spell catalog (pgs. 51–73).
+7. **Gameplay, Light Timers, Combat, Dying, Resting, Carousing & Modes of Play (pgs. 78–95, 110–117)**:
+   - Standard DCs (`9`, `12`, `15`, `18`), d6 Decider, Luck Tokens, Light Timers (60 min / 10 rounds, ride-along vs extinguish-and-reset, 3-torch 8-hour Campfire, Total Darkness disadvantage, Light Mishaps d6 table).
+   - Combat attacks (Melee STR, Ranged DEX, Finesse/Thrown `max(STR, DEX)`, Versatile 1H/2H, Critical Hit double dice), Morale (`DC 15 WIS`), Death Timer (`1d4 + CON mod` min 1, Nat 20 rises with 1 HP), Stabilize (`DC 15 INT`).
+   - Resting (`1` ration, 8 hrs, `DC 12 CON` on interruption), Carousing (`1d8 + event bonus`, pgs. 92–93), *Wizards and Thieves* dice game (pgs. 94–95), Treasure Quality XP (`0 / 1 / 3 / 10 XP`, pg. 117), and optional Modes of Play flags (`Blitz`, `Chaos`, `Deadly`, `Fatality`, `Grinder`, `Hunter`, `Momentum`, `Pulp`, pg. 111).
+
+## 8. Out of Scope
+- Multi-system campaigns (one active system per campaign).

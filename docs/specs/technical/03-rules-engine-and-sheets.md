@@ -165,14 +165,27 @@ All require a session. New error codes: `INVALID_SYSTEM_CONFIG` (422),
 | Method & path | Authz | Request → Response |
 |---|---|---|
 | `GET /api/campaigns/:id/sheets` | participant | → 200 `{sheets: SheetSummary[]}` (PCs first, then NPCs, name asc) |
-| `POST /api/campaigns/:id/sheets` | participant; NPC → GM only | `{kind, name, ancestryId?, classId?, backgroundId?, abilities, armorId?, shield?, extras?}` → 201 `{sheet}`. 400 per BR-20 / `SYSTEM_REQUIRED` if campaign has no system / 403 NPC as player |
+| `POST /api/campaigns/:id/sheets` | participant; NPC → GM only | `{kind, name, level? (0..1), ancestryId?, classId?, backgroundId?, abilities, armorId?, shield?, extras?}` → 201 `{sheet}`. 400 per BR-20 / `SYSTEM_REQUIRED` if campaign has no system / 403 NPC as player |
+| `POST /api/campaigns/:id/sheets/generate` | participant | `{level?: 0 \| 1, kind?: "PC" \| "NPC", name?}` → 201 `{sheet}` (randomly rolls stats, ancestry, background, alignment, deity, class/talents/spells, starting gear per Shadowdark pgs. 40–41) |
+| `POST /api/campaigns/:id/sheets/shadowdarklings` | participant | Shadowdarklings JSON body → 201 `{sheet}` (bidirectional import of Shadowdarklings character export) |
 | `GET /api/sheets/:id` | participant | → 200 `{sheet}` |
+| `GET /api/sheets/:id/shadowdarklings` | participant | → 200 `{character: ShadowdarklingsExport}` (full Shadowdarklings-compatible JSON export) |
 | `PATCH /api/sheets/:id` | owner (own PC) or campaign owner | partial of create body + `{level? ignored, xp?, abilities?, hpMax?, hpCurrent?, armorId?, shield?, extras?}` → 200 `{sheet}` (BR-20 revalidated) |
-| `POST /api/sheets/:id/levelup` | as PATCH | → 200 `{sheet}`; level+1, hpMax += hpPerLevel, XP reset if config says so; 400 at max level |
+| `POST /api/sheets/:id/levelup` | as PATCH | → 200 `{sheet}`; level+1 (including Level 0 → Level 1 graduation with class selection), hpMax += hpPerLevel, XP reset if config says so; 400 at max level |
+| `POST /api/sheets/:id/shadowdark-action` | as PATCH | `{action: "cast_spell" \| "maintain_focus" \| "learn_scroll" \| "rest" \| "carouse" \| "roll_talent" \| "death_timer" \| "dying_roll" \| "stabilize" \| "light", ...params}` → 200 `{result, sheet}` |
 | `DELETE /api/sheets/:id` | as PATCH | → 204 |
 
 `SheetSummary`: `{id, kind, name, ownerId, ownerName?, ancestryId, classId, level, systemKey}`.
-`Sheet` (detail): summary + `{backgroundId, xp, abilities: {str: {score, modifier}, …}, hpMax, hpCurrent, armorId, shield, extras, derived: {hpPerLevel?, proficiencyBonus?, initiative?, carrySlots?, armorClass, nextLevelXp?, spellcasting?: {ability, known, allowed}}}`.
+`Sheet` (detail): summary + `{backgroundId, xp, abilities: {str: {score, modifier}, …}, hpMax, hpCurrent, armorId, shield, extras, derived: {hpPerLevel?, proficiencyBonus?, initiative?, carrySlots?, armorClass, nextLevelXp?, spellcasting?: {ability, known, allowed, knownByTier?}, shadowdark?: ShadowdarkDerivedSummary}}`.
+
+### Shadowdark Core Rules Module (`server/src/rules/shadowdark.ts`)
+Encapsulates all tables, formulas, and rules from `Shadowdark RPG - V4-7.txt`:
+- **Stats & Level 0/1**: `shadowdarkStatModifier(score)`, `rollShadowdarkStats(opts)`, `computeShadowdarkStartingHp(params)`, `rollLevelZeroGear(opts)`, `rollLevelOneGold(opts)`.
+- **Ancestries & Classes**: `SHADOWDARK_ANCESTRIES` (Dwarf *Stout*, Elf *Farsight*, Goblin *Keen Senses*, Half-Orc *Mighty*, Halfling *Stealthy*, Human *Ambitious*), `SHADOWDARK_CLASSES` (Fighter *Hauler*/*Weapon Mastery*/*Grit*, Priest *Turn Undead*/*Deity*/*Languages*, Thief *Backstab*/*Thievery*, Wizard *Learning Spells*/*Languages*), `SHADOWDARK_BACKGROUNDS` (1–20), `SHADOWDARK_ALIGNMENTS`, `SHADOWDARK_DEITIES` (all 9), `SHADOWDARK_TITLES`, `SHADOWDARK_LANGUAGES` (10 Common, 4 Rare), `SHADOWDARK_NAMES`, `getCharacterTitle(classId, level, alignment)`, `rollClassTalent(classId, roll2d6)`.
+- **Gear, Slots, Armor & Weapons**: `SHADOWDARK_BASIC_GEAR`, `SHADOWDARK_CRAWLING_KIT`, `SHADOWDARK_ARMOR`, `SHADOWDARK_WEAPONS` (all 15 weapons with cost, type `M`/`R`/`M/R`, range `C`/`N`/`F`, damage, versatile damage, gear slots, properties `F`/`L`/`Th`/`2H`/`V`), `calculateShadowdarkGearSlots(params)`, `computeWeaponAttackBonusAndDamage(params)`.
+- **Magic, Focus, Penance & Mishaps**: `SHADOWDARK_SPELLS` (all Priest & Wizard spells Tiers 1–5), `PRIEST_SPELLS_KNOWN_BY_TIER`, `WIZARD_SPELLS_KNOWN_BY_TIER`, `PRIEST_PENANCE_SACRIFICE_GP` (`1:5, 2:20, 3:40, 4:90, 5:150`), `WIZARD_MISHAP_TABLES` (`tier1_2`, `tier3_4`, `tier5` with automatic Devastation! roll-twice-and-combine on 1), `resolveSpellcastingCheck(params)`, `resolveFocusCheck(params)`, `resolveScrollOrWandCast(params)`, `resolveLearnSpellFromScroll(params)`.
+- **Gameplay, Light, Combat, Dying, Rest, Carousing, Wizards & Thieves, XP & Modes**: `SHADOWDARK_DCS` (`easy: 9, normal: 12, hard: 15, extreme: 18`), `rollD6Decider(roll)`, `manageLightSource(params)`, `rollLightMishap(roll)`, `rollMoraleCheck(params)`, `rollDeathTimer(params)`, `rollDyingTurn(params)`, `resolveStabilizeCheck(params)`, `resolveRest(params)`, `resolveCarousing(params)`, `playWizardsAndThievesTurn(params)`, `awardTreasureQualityXp(quality)`, `computeHunterModeMonsterXp(monsterLevel)`.
+- **Shadowdarklings JSON Parity**: `exportToShadowdarklings(sheet, config)` and `importFromShadowdarklings(doc)`.
 
 ## 6. Permissions Matrix (integration-test checklist, append to `02` §4)
 

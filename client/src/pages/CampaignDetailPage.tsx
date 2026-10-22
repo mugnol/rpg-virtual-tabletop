@@ -5,8 +5,10 @@ import {
   createSession,
   createSheet,
   deleteCampaign,
+  generateRandomSheet,
   getCampaign,
   getSystem,
+  importShadowdarklingsSheet,
   listCampaignSessions,
   listCampaignSheets,
   listSystems,
@@ -277,6 +279,9 @@ function SheetsSection({ campaign, isOwner }: { campaign: CampaignDetail; isOwne
   const [sheets, setSheets] = useState<SheetSummary[]>([]);
   const [systemConfig, setSystemConfig] = useState<SystemConfig | null>(null);
   const [creatingKind, setCreatingKind] = useState<"PC" | "NPC" | null>(null);
+  const [importingJson, setImportingJson] = useState(false);
+  const [rawImportText, setRawImportText] = useState("");
+  const [busyRandom, setBusyRandom] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -300,6 +305,40 @@ function SheetsSection({ campaign, isOwner }: { campaign: CampaignDetail; isOwne
     };
   }, [campaign.id, campaign.system]);
 
+  async function onGenerateRandom(level: 0 | 1) {
+    setError(null);
+    setBusyRandom(true);
+    try {
+      const { sheet } = await generateRandomSheet(campaign.id, { level });
+      navigate(`/sheets/${sheet.id}`);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to generate character");
+    } finally {
+      setBusyRandom(false);
+    }
+  }
+
+  async function onImportShadowdarklings(e: FormEvent) {
+    e.preventDefault();
+    setError(null);
+    let parsed: Record<string, unknown>;
+    try {
+      parsed = JSON.parse(rawImportText) as Record<string, unknown>;
+    } catch {
+      setError("Invalid Shadowdarklings JSON");
+      return;
+    }
+    setBusyRandom(true);
+    try {
+      const { sheet } = await importShadowdarklingsSheet(campaign.id, parsed);
+      navigate(`/sheets/${sheet.id}`);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to import character");
+    } finally {
+      setBusyRandom(false);
+    }
+  }
+
   return (
     <section data-testid="sheet-section" className="panel">
       <h2>Character Sheets</h2>
@@ -322,8 +361,70 @@ function SheetsSection({ campaign, isOwner }: { campaign: CampaignDetail; isOwne
             New NPC
           </button>
         )}
+        {campaign.system === "shadowdark" && (
+          <>
+            <button
+              data-testid="generate-random-character-button"
+              type="button"
+              className="btn btn-secondary"
+              disabled={busyRandom}
+              onClick={() => onGenerateRandom(1)}
+            >
+              Random Lv 1 Crawler
+            </button>
+            <button
+              data-testid="generate-level-zero-button"
+              type="button"
+              className="btn btn-secondary"
+              disabled={busyRandom}
+              onClick={() => onGenerateRandom(0)}
+            >
+              Random Lv 0 Gauntlet
+            </button>
+            <button
+              data-testid="import-shadowdarklings-toggle"
+              type="button"
+              className="btn btn-secondary"
+              onClick={() => setImportingJson((prev) => !prev)}
+            >
+              Import Shadowdarklings JSON
+            </button>
+          </>
+        )}
       </div>
       <FormError message={error} />
+      {importingJson && (
+        <form className="card form" onSubmit={onImportShadowdarklings}>
+          <h3>Import Shadowdarklings Character JSON</h3>
+          <label>
+            Shadowdarklings JSON
+            <textarea
+              data-testid="import-shadowdarklings-input"
+              rows={5}
+              value={rawImportText}
+              onChange={(e) => setRawImportText(e.target.value)}
+              placeholder='Paste JSON exported from shadowdarklings.net...'
+            />
+          </label>
+          <div className="button-row">
+            <button
+              data-testid="import-shadowdarklings-submit"
+              type="submit"
+              className="btn btn-primary"
+              disabled={busyRandom}
+            >
+              Import Character
+            </button>
+            <button
+              type="button"
+              className="btn btn-secondary"
+              onClick={() => setImportingJson(false)}
+            >
+              Cancel
+            </button>
+          </div>
+        </form>
+      )}
       {creatingKind && systemConfig && (
         <CreateSheetForm
           campaignId={campaign.id}

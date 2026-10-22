@@ -1,11 +1,21 @@
 import { Router } from "express";
 import { asyncHandler, parseBody } from "../../lib/http.js";
 import { requireAuth } from "../../middleware/auth.js";
-import { sheetCreateSchema, sheetUpdateSchema } from "./schemas.js";
+import {
+  shadowdarkActionSchema,
+  sheetCreateSchema,
+  sheetGenerateSchema,
+  sheetLevelUpSchema,
+  sheetUpdateSchema,
+} from "./schemas.js";
 import {
   createSheet,
   deleteSheet,
+  executeShadowdarkAction,
+  exportSheetShadowdarklings,
+  generateRandomSheet,
   getSheet,
+  importSheetShadowdarklings,
   levelUpSheet,
   listCampaignSheets,
   updateSheet,
@@ -29,6 +39,27 @@ campaignSheetsRouter.post(
   asyncHandler(async (req, res) => {
     const input = parseBody(sheetCreateSchema, req.body);
     const sheet = await createSheet(req.user!.id, req.params.id, input);
+    res.status(201).json({ sheet });
+  }),
+);
+
+campaignSheetsRouter.post(
+  "/generate",
+  asyncHandler(async (req, res) => {
+    const input = parseBody(sheetGenerateSchema, req.body ?? {});
+    const sheet = await generateRandomSheet(req.user!.id, req.params.id, input);
+    res.status(201).json({ sheet });
+  }),
+);
+
+campaignSheetsRouter.post(
+  "/shadowdarklings",
+  asyncHandler(async (req, res) => {
+    const sheet = await importSheetShadowdarklings(
+      req.user!.id,
+      req.params.id,
+      req.body,
+    );
     res.status(201).json({ sheet });
   }),
 );
@@ -58,8 +89,26 @@ sheetsRouter.patch(
 sheetsRouter.post(
   "/:id/levelup",
   asyncHandler(async (req, res) => {
-    const sheet = await levelUpSheet(req.user!.id, req.params.id);
+    const input = parseBody(sheetLevelUpSchema, req.body ?? {});
+    const sheet = await levelUpSheet(req.user!.id, req.params.id, input);
     res.json({ sheet });
+  }),
+);
+
+sheetsRouter.get(
+  "/:id/shadowdarklings",
+  asyncHandler(async (req, res) => {
+    const character = await exportSheetShadowdarklings(req.user!.id, req.params.id);
+    res.json({ character });
+  }),
+);
+
+sheetsRouter.post(
+  "/:id/shadowdark-action",
+  asyncHandler(async (req, res) => {
+    const input = parseBody(shadowdarkActionSchema, req.body);
+    const outcome = await executeShadowdarkAction(req.user!.id, req.params.id, input);
+    res.json(outcome);
   }),
 );
 

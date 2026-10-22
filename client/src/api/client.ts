@@ -127,6 +127,45 @@ export interface SheetExtras {
   spells: string[];
   notes: string;
   coins: Record<string, number>;
+  alignment?: "Lawful" | "Neutral" | "Chaotic";
+  deity?: string | null;
+  title?: string | null;
+  languages?: string[];
+  weapons?: string[];
+  weaponMastery?: string[];
+  gear?: Array<{ name: string; slots: number; quantity?: number; type?: string }>;
+  lostSpells?: string[];
+  penanceSpells?: string[];
+  activeFocusSpell?: string | null;
+  luckTokens?: number;
+  lightTimer?: { active: boolean; source: string | null; remainingMinutes: number } | null;
+  deathTimer?: number | null;
+}
+
+export interface ShadowdarkDerived {
+  title: string;
+  alignment: string;
+  deity: string | null;
+  languages: string[];
+  ancestryTrait: { name: string; description: string } | null;
+  maxGearSlots: number;
+  usedGearSlots: number;
+  weapons: Array<{
+    key: string;
+    name: string;
+    cost: string;
+    type: string;
+    range: string;
+    damage: string;
+    slots: number;
+    properties: string[];
+    stats: {
+      attackBonus: number;
+      damageBonus: number;
+      damageFormula: string;
+    };
+  }>;
+  spellsKnownByTier: number[] | null;
 }
 
 export interface SheetDetail extends SheetSummary {
@@ -151,6 +190,7 @@ export interface SheetDetail extends SheetSummary {
       known: number;
       allowed: number;
     } | null;
+    shadowdark?: ShadowdarkDerived;
   };
 }
 
@@ -340,8 +380,38 @@ export function updateSheet(
   return request("PATCH", `/sheets/${id}`, input);
 }
 
-export function levelUpSheet(id: string): Promise<{ sheet: SheetDetail }> {
-  return request("POST", `/sheets/${id}/levelup`, {});
+export function levelUpSheet(
+  id: string,
+  input?: { classId?: string | null },
+): Promise<{ sheet: SheetDetail }> {
+  return request("POST", `/sheets/${id}/levelup`, input ?? {});
+}
+
+export function generateRandomSheet(
+  campaignId: string,
+  input?: { level?: 0 | 1; kind?: "PC" | "NPC"; name?: string },
+): Promise<{ sheet: SheetDetail }> {
+  return request("POST", `/campaigns/${campaignId}/sheets/generate`, input ?? {});
+}
+
+export function importShadowdarklingsSheet(
+  campaignId: string,
+  characterJson: Record<string, unknown>,
+): Promise<{ sheet: SheetDetail }> {
+  return request("POST", `/campaigns/${campaignId}/sheets/shadowdarklings`, characterJson);
+}
+
+export function exportShadowdarklingsSheet(
+  sheetId: string,
+): Promise<{ character: Record<string, unknown> }> {
+  return request("GET", `/sheets/${sheetId}/shadowdarklings`);
+}
+
+export function executeShadowdarkAction(
+  sheetId: string,
+  input: Record<string, unknown>,
+): Promise<{ result: Record<string, unknown>; sheet: SheetDetail }> {
+  return request("POST", `/sheets/${sheetId}/shadowdark-action`, input);
 }
 
 export function deleteSheet(id: string): Promise<void> {
