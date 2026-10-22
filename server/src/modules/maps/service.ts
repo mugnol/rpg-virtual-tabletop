@@ -6,6 +6,8 @@ import {
   advanceTurn,
   buildTurnQueue,
   hasThiefInitiativeTalent,
+  moveTurnQueueEntry,
+  reorderTurnQueue,
   resolveAttack,
   revertTurn,
   rollEncounterInitiative,
@@ -20,6 +22,7 @@ import { findSessionWithCampaign } from "../sessions/service.js";
 import type {
   CombatAttackInput,
   CombatNextInput,
+  CombatReorderInput,
   CombatRollInitiativeInput,
   CombatSetInitiativeInput,
   CombatSettingsInput,
@@ -50,6 +53,7 @@ export interface FormattedCombatState {
   chaosMode: boolean;
   groupMonsterInitiative: boolean;
   isSurpriseRound: boolean;
+  freeformMode: boolean;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -85,6 +89,7 @@ export function formatCombatState(
     chaosMode: Boolean(combat.chaosMode),
     groupMonsterInitiative: Boolean(combat.groupMonsterInitiative),
     isSurpriseRound: Boolean(combat.isSurpriseRound),
+    freeformMode: Boolean((combat as any).freeformMode),
   };
 }
 
@@ -909,10 +914,13 @@ export async function updateCombatSettings(
   const map = await findMapWithSession(mapId);
   assertOwner(map.session.campaign, userId);
 
-  const data: { chaosMode?: boolean; groupMonsterInitiative?: boolean } = {};
+  const data: { chaosMode?: boolean; groupMonsterInitiative?: boolean; freeformMode?: boolean } = {};
   if (input.chaosMode !== undefined) data.chaosMode = input.chaosMode;
   if (input.groupMonsterInitiative !== undefined) {
     data.groupMonsterInitiative = input.groupMonsterInitiative;
+  }
+  if (input.freeformMode !== undefined) {
+    data.freeformMode = input.freeformMode;
   }
 
   const updatedCombat = await prisma.combatState.upsert({
@@ -927,6 +935,45 @@ export async function updateCombatSettings(
       ...data,
     },
     update: data,
+  });
+
+  return {
+    combat: formatCombatState(updatedCombat, map.tokens)!,
+    tokens: map.tokens,
+  };
+}
+
+export async function reorderCombatTurnQueue(
+  userId: string,
+  mapId: string,
+  input: CombatReorderInput,
+) {
+  const map = await findMapWithSession(mapId);
+  assertOwner(map.session.campaign, userId);
+
+  const combat = map.combat;
+  if (!combat) {
+    throw new ApiError(400, "COMBAT_INACTIVE", "Combat state not found");
+  }
+
+  const currentTurnOrder = parseJsonArray<string>(combat.turnOrder);
+  let res: { turnOrder: string[]; activeTokenId: string; turnIndex: number };
+
+  if (input.orderedTokenIds && Array.isArray(input.orderedTokenIds)) {
+    res = reorderTurnQueue(currentTurnOrder, input.orderedTokenIds, combat.activeTokenId);
+  } else if (input.tokenId && input.direction) {
+    res = moveTurnQueueEntry(currentTurnOrder, input.tokenId, input.direction, combat.activeTokenId);
+  } else {
+    throw new ApiError(400, "INVALID_REORDER_INPUT", "Must provide orderedTokenIds or tokenId and direction");
+  }
+
+  const updatedCombat = await prisma.combatState.update({
+    where: { mapId },
+    data: {
+      turnOrder: JSON.stringify(res.turnOrder),
+      turnIndex: res.turnIndex,
+      activeTokenId: res.activeTokenId,
+    },
   });
 
   return {

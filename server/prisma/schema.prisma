@@ -195,6 +195,7 @@ model CombatState {
   chaosMode              Boolean    @default(false)
   groupMonsterInitiative Boolean    @default(false)
   isSurpriseRound        Boolean    @default(false)
+  freeformMode           Boolean    @default(false)
   createdAt              DateTime   @default(now())
   updatedAt              DateTime   @updatedAt
 }

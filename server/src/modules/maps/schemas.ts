@@ -87,6 +87,13 @@ export const combatSurpriseSchema = z.object({
 export const combatSettingsSchema = z.object({
   chaosMode: z.boolean().optional(),
   groupMonsterInitiative: z.boolean().optional(),
+  freeformMode: z.boolean().optional(),
+});
+
+export const combatReorderSchema = z.object({
+  orderedTokenIds: z.array(z.string()).optional(),
+  tokenId: z.string().optional(),
+  direction: z.enum(["up", "down"]).optional(),
 });
 
 export const combatAttackSchema = z.object({
@@ -113,5 +120,6 @@ export type CombatRollInitiativeInput = z.infer<typeof combatRollInitiativeSchem
 export type CombatSetInitiativeInput = z.infer<typeof combatSetInitiativeSchema>;
 export type CombatSurpriseInput = z.infer<typeof combatSurpriseSchema>;
 export type CombatSettingsInput = z.infer<typeof combatSettingsSchema>;
+export type CombatReorderInput = z.infer<typeof combatReorderSchema>;
 export type CombatAttackInput = z.infer<typeof combatAttackSchema>;
 export type CombatTimerCreateInput = z.infer<typeof combatTimerCreateSchema>;

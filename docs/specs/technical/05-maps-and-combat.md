@@ -67,6 +67,7 @@ model CombatState {
   chaosMode              Boolean    @default(false)
   groupMonsterInitiative Boolean    @default(false)
   isSurpriseRound        Boolean    @default(false)
+  freeformMode           Boolean    @default(false)
   createdAt              DateTime   @default(now())
   updatedAt              DateTime   @updatedAt
 }
@@ -130,6 +131,7 @@ export interface FormattedCombatState {
   chaosMode: boolean;
   groupMonsterInitiative: boolean;
   isSurpriseRound: boolean;
+  freeformMode: boolean;
 }
 ```
 
@@ -164,8 +166,10 @@ export interface FormattedCombatState {
   - Manually sets/overrides a participant's `initiative` score (`{ tokenId, initiative }`), re-sorts the Turn Queue, and broadcasts updated state.
 - `POST /api/maps/:mapId/combat/surprise` (GM only)
   - Toggles or sets `hasSurprise` (`{ tokenId, hasSurprise }`) on a participant and re-sorts the Turn Queue.
+- `POST /api/maps/:mapId/combat/reorder` (GM only)
+  - Reorders the Turn Queue participants via `{ orderedTokenIds: string[] }` or `{ tokenId: string, direction: "up" | "down" }`. Preserves `activeTurnEntityId` and recomputes `turnIndex`. Non-GM requests are rejected with `403 FORBIDDEN`.
 - `PATCH /api/maps/:mapId/combat/settings` (GM only)
-  - Updates combat encounter settings (`{ chaosMode?, groupMonsterInitiative? }`) and broadcasts updated combat state.
+  - Updates combat encounter settings (`{ chaosMode?, groupMonsterInitiative?, freeformMode? }`) and broadcasts updated combat state.
 - `POST /api/maps/:mapId/combat/next` (GM or active player)
   - Advances turn to next participant in queue. On full queue cycle wrap (`turnIndex` wraps to 0), increments `roundNumber`, decrements all active `timers` by 1 round, clears `isSurpriseRound`, and if `chaosMode` is active, automatically re-rolls initiative and re-sorts the Turn Queue for the new round.
 - `POST /api/maps/:mapId/combat/end-turn` (Active player or GM)
@@ -196,7 +200,8 @@ Clients connected to `/ws/sessions/:id` exchange map and combat messages:
 - `roll_initiative`: `{ type: "roll_initiative", mapId, tokenId? }`
 - `set_initiative`: `{ type: "set_initiative", mapId, tokenId, initiative }`
 - `toggle_surprise`: `{ type: "toggle_surprise", mapId, tokenId, hasSurprise? }`
-- `update_combat_settings`: `{ type: "update_combat_settings", mapId, chaosMode?, groupMonsterInitiative? }`
+- `reorder_turn_queue`: `{ type: "reorder_turn_queue", mapId, orderedTokenIds?: string[], tokenId?: string, direction?: "up" | "down" }`
+- `update_combat_settings`: `{ type: "update_combat_settings", mapId, chaosMode?, groupMonsterInitiative?, freeformMode? }`
 - `next_turn`: `{ type: "next_turn", mapId }`
 - `end_turn`: `{ type: "end_turn", mapId }`
 - `prev_turn`: `{ type: "prev_turn", mapId }`
@@ -214,6 +219,7 @@ Clients connected to `/ws/sessions/:id` exchange map and combat messages:
 - `token_deleted`: `{ type: "token_deleted", tokenId: string, combat?: FormattedCombatState }`
 - `combat_started`: `{ type: "combat_started", mapId, combat: FormattedCombatState, tokens: MapToken[] }`
 - `initiative_updated`: `{ type: "initiative_updated", mapId, combat: FormattedCombatState, tokens: MapToken[] }`
+- `turn_queue_reordered`: `{ type: "turn_queue_reordered", mapId, combat: FormattedCombatState }`
 - `turn_changed`: `{ type: "turn_changed", mapId, combat: FormattedCombatState, tokens?: MapToken[] }`
 - `combat_timer_updated`: `{ type: "combat_timer_updated", mapId, combat: FormattedCombatState }`
 - `combat_attack`: `{ type: "combat_attack", mapId, attack: CombatAttackResult, targetToken: MapToken, combat?: FormattedCombatState }`
@@ -240,6 +246,14 @@ Clients connected to `/ws/sessions/:id` exchange map and combat messages:
      3. Descending `dexModifier`.
      4. Entity priority (`CHARACTER` before `MONSTER`).
      5. Stable `id` comparison.
+
+5. **`moveTurnQueueEntry(turnOrder, tokenId, direction, activeTokenId)`**:
+   - Moves `tokenId` up (`direction = "up"`) or down (`direction = "down"`) by 1 position in `turnOrder`.
+   - Clamps at boundary (cannot move top element up or bottom element down).
+   - Preserves `activeTokenId` and updates `turnIndex = turnOrder.indexOf(activeTokenId)`.
+6. **`reorderTurnQueue(turnOrder, orderedTokenIds, activeTokenId)`**:
+   - Validates that `orderedTokenIds` contains the existing participant IDs.
+   - Sets `turnOrder = orderedTokenIds` and updates `turnIndex = turnOrder.indexOf(activeTokenId)`.
 
 ### 4.1 Turn Queue Progression & Timer Ticking
 1. **`advanceTurn(turnOrder, currentTurnIndex, currentRound)`**:
@@ -314,6 +328,9 @@ Clients connected to `/ws/sessions/:id` exchange map and combat messages:
 | Initiative Override Set Button (GM) | `initiative-set-${tokenId}` | Applies manual initiative override |
 | Grouped Monster Initiative Toggle (GM) | `group-monster-initiative-toggle` | Toggles grouped vs individual monster initiative |
 | Chaos Mode Toggle (GM) | `chaos-mode-toggle` | Toggles Chaos Mode (re-roll initiative every round) |
+| Freeform Mode Toggle (GM) | `freeform-mode-toggle` | Toggles Freeform / round-robin custom turn order |
+| Turn Queue Move Up Button (GM) | `turn-queue-move-up-${tokenId}` | Moves participant up 1 position in queue |
+| Turn Queue Move Down Button (GM) | `turn-queue-move-down-${tokenId}` | Moves participant down 1 position in queue |
 | Surprise Round Banner | `surprise-round-banner` | Indicates active Surprise Round |
 | Turn Queue HP | `turn-queue-hp` | Participant HP in the turn queue |
 | Turn Queue Active Badge | `turn-queue-active-badge` | Active turn badge on current participant |

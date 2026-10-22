@@ -359,6 +359,78 @@ export function sortInitiative(
   return sorted.map((c) => c.id);
 }
 
+export function moveTurnQueueEntry(
+  turnOrder: string[],
+  tokenId: string,
+  direction: "up" | "down",
+  activeTokenId: string | null,
+): {
+  turnOrder: string[];
+  activeTokenId: string;
+  turnIndex: number;
+} {
+  const list = [...turnOrder];
+  const idx = list.indexOf(tokenId);
+  if (idx === -1) {
+    const activeId = activeTokenId ?? list[0] ?? "";
+    const activeIdx = list.indexOf(activeId);
+    return { turnOrder: list, activeTokenId: activeId, turnIndex: Math.max(0, activeIdx) };
+  }
+
+  if (direction === "up" && idx > 0) {
+    const temp = list[idx - 1];
+    list[idx - 1] = list[idx];
+    list[idx] = temp;
+  } else if (direction === "down" && idx < list.length - 1) {
+    const temp = list[idx + 1];
+    list[idx + 1] = list[idx];
+    list[idx] = temp;
+  }
+
+  const resolvedActive =
+    activeTokenId && list.includes(activeTokenId) ? activeTokenId : list[0] ?? "";
+  const newActiveIndex = resolvedActive ? list.indexOf(resolvedActive) : 0;
+
+  return {
+    turnOrder: list,
+    activeTokenId: resolvedActive,
+    turnIndex: Math.max(0, newActiveIndex),
+  };
+}
+
+export function reorderTurnQueue(
+  turnOrder: string[],
+  orderedTokenIds: string[],
+  activeTokenId: string | null,
+): {
+  turnOrder: string[];
+  activeTokenId: string;
+  turnIndex: number;
+} {
+  const currentSet = new Set(turnOrder);
+  const reordered: string[] = [];
+  for (const id of orderedTokenIds) {
+    if (currentSet.has(id) && !reordered.includes(id)) {
+      reordered.push(id);
+    }
+  }
+  for (const id of turnOrder) {
+    if (!reordered.includes(id)) {
+      reordered.push(id);
+    }
+  }
+
+  const resolvedActive =
+    activeTokenId && reordered.includes(activeTokenId) ? activeTokenId : reordered[0] ?? "";
+  const newActiveIndex = resolvedActive ? reordered.indexOf(resolvedActive) : 0;
+
+  return {
+    turnOrder: reordered,
+    activeTokenId: resolvedActive,
+    turnIndex: Math.max(0, newActiveIndex),
+  };
+}
+
 function parseInitiativeMeta(raw?: string | InitiativeRollMeta | null): InitiativeRollMeta | null {
   if (!raw) return null;
   if (typeof raw === "object") {

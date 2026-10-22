@@ -613,4 +613,105 @@ describe("Tactical Maps & Combat Integration (BR-35..BR-50)", () => {
       expect(r2Queue[i].initiative).toBeGreaterThanOrEqual(r2Queue[i + 1].initiative);
     }
   });
+
+  it("allows GM to manually reorder turn queue, moves entry up/down, preserves activeTurnEntityId, toggles freeform mode, and rejects players", async () => {
+    seq += 1;
+    const gmAgent = await registerAgent(`reorder-gm-${seq}@test.dev`, "GM", "Reorder GM");
+    const playerAgent = await registerAgent(`reorder-p-${seq}@test.dev`, "PLAYER", "Reorder Player");
+    const campaignId = (await createSystemCampaign(gmAgent, `Reorder Camp ${seq}`, "shadowdark")).id;
+    await joinPlayer(gmAgent, playerAgent, campaignId);
+
+    const sheet = await createPc(playerAgent, campaignId, "Valeros");
+    const sheetId = sheet.id as string;
+
+    const sessionId = (
+      await gmAgent.post(`/api/campaigns/${campaignId}/sessions`).send({ name: "Reorder Session" })
+    ).body.session.id;
+
+    const mapId = (
+      await gmAgent.post(`/api/sessions/${sessionId}/maps`).send({
+        name: "Colosseum",
+        width: 12,
+        height: 12,
+      })
+    ).body.map.id;
+
+    // Tokens: A (Player), B (Orc), C (Goblin)
+    const tokenA = (
+      await gmAgent.post(`/api/maps/${mapId}/tokens`).send({
+        type: "CHARACTER",
+        characterSheetId: sheetId,
+        x: 1,
+        y: 1,
+      })
+    ).body.token.id as string;
+
+    const tokenB = (
+      await gmAgent.post(`/api/maps/${mapId}/tokens`).send({
+        type: "MONSTER",
+        name: "Orc",
+        x: 3,
+        y: 1,
+      })
+    ).body.token.id as string;
+
+    const tokenC = (
+      await gmAgent.post(`/api/maps/${mapId}/tokens`).send({
+        type: "MONSTER",
+        name: "Goblin",
+        x: 5,
+        y: 1,
+      })
+    ).body.token.id as string;
+
+    // Start combat
+    const startRes = await gmAgent.post(`/api/maps/${mapId}/combat/start`).send({});
+    expect(startRes.status).toBe(200);
+
+    // Initial order should contain tokenA, tokenB, tokenC
+    const initialTurnOrder = startRes.body.combat.turnOrder as string[];
+    expect(initialTurnOrder).toHaveLength(3);
+
+    // 1. Player attempts to reorder turn queue -> 403 Forbidden
+    const playerAttempt = await playerAgent.post(`/api/maps/${mapId}/combat/reorder`).send({
+      orderedTokenIds: [tokenC, tokenB, tokenA],
+    });
+    expect(playerAttempt.status).toBe(403);
+
+    // 2. GM moves the 2nd token up by 1 position using direction "up"
+    const secondTokenId = initialTurnOrder[1];
+    const moveUpRes = await gmAgent.post(`/api/maps/${mapId}/combat/reorder`).send({
+      tokenId: secondTokenId,
+      direction: "up",
+    });
+    expect(moveUpRes.status).toBe(200);
+    expect(moveUpRes.body.combat.turnOrder[0]).toBe(secondTokenId);
+    expect(moveUpRes.body.combat.turnOrder[1]).toBe(initialTurnOrder[0]);
+    // activeTurnEntityId should be preserved
+    expect(moveUpRes.body.combat.activeTurnEntityId).toBe(startRes.body.combat.activeTurnEntityId);
+    expect(moveUpRes.body.combat.turnIndex).toBe(
+      moveUpRes.body.combat.turnOrder.indexOf(startRes.body.combat.activeTurnEntityId),
+    );
+
+    // 3. GM submits custom sequence [tokenC, tokenA, tokenB]
+    const customReorderRes = await gmAgent.post(`/api/maps/${mapId}/combat/reorder`).send({
+      orderedTokenIds: [tokenC, tokenA, tokenB],
+    });
+    expect(customReorderRes.status).toBe(200);
+    expect(customReorderRes.body.combat.turnOrder).toEqual([tokenC, tokenA, tokenB]);
+    expect(customReorderRes.body.combat.activeTurnEntityId).toBe(startRes.body.combat.activeTurnEntityId);
+
+    // 4. GM toggles freeformMode to true
+    const freeformRes = await gmAgent.patch(`/api/maps/${mapId}/combat/settings`).send({
+      freeformMode: true,
+    });
+    expect(freeformRes.status).toBe(200);
+    expect(freeformRes.body.combat.freeformMode).toBe(true);
+
+    // Player attempts to toggle freeformMode -> 403 Forbidden
+    const playerSettingsAttempt = await playerAgent.patch(`/api/maps/${mapId}/combat/settings`).send({
+      freeformMode: false,
+    });
+    expect(playerSettingsAttempt.status).toBe(403);
+  });
 });

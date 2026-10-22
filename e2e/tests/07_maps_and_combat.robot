@@ -317,3 +317,78 @@ Shadowdark initiative system, surprise toggles, grouped monster initiative, Chao
     Switch Context    ${gm_ctx}
     Click TestID    combat-end-button
     Wait For Elements State    css=[data-testid="combat-tracker"]    hidden
+
+GM manual turn queue reorganization, move up and down controls, and freeform mode
+    ${gm_ctx}=    New Context
+    Register Via UI    reorder-gm-${TS}@e2e.test    gm    Reorder GM
+    Create System Campaign Via UI    Reorder Campaign    shadowdark
+    Click TestID    invite-generate-button
+    ${code}=    Get Text    css=[data-testid="invite-code"]
+
+    # Player joins and creates PC
+    ${player_ctx}=    New Context
+    Register Via UI    reorder-p-${TS}@e2e.test    player    Reorder Player
+    Go To    ${HOME}
+    Fill TestID    token-input    ${code}
+    Click TestID    join-button
+    Click TestID    sheet-create-pc-button
+    Fill TestID    sheet-name-input    Theron
+    Click TestID    sheet-save-button
+    TestID Should Be Visible    page-sheet
+
+    # GM creates session and places CHARACTER and 2 MONSTER tokens
+    Switch Context    ${gm_ctx}
+    Click Campaign Named    Reorder Campaign
+    Click TestID    session-create-button
+    Fill TestID    session-name-input    Reorder Arena
+    Click TestID    session-create-submit
+    Click    css=[data-testid="session-item"]:has-text("Reorder Arena")
+    TestID Should Be Visible    map-board
+
+    Click TestID    token-add-button
+    Select Options By    css=[data-testid="token-type-select"]    value    CHARACTER
+    Select Options By    css=[data-testid="token-sheet-select"]    text    Theron
+    Click TestID    token-submit-button
+
+    Click TestID    token-add-button
+    Select Options By    css=[data-testid="token-type-select"]    value    MONSTER
+    Fill TestID    token-name-input    Minotaur
+    Fill TestID    token-hp-input    30
+    Fill TestID    token-ac-input    14
+    Click TestID    token-submit-button
+
+    Click TestID    token-add-button
+    Select Options By    css=[data-testid="token-type-select"]    value    MONSTER
+    Fill TestID    token-name-input    Harpy
+    Fill TestID    token-hp-input    15
+    Fill TestID    token-ac-input    11
+    Click TestID    token-submit-button
+
+    # GM starts combat
+    Click TestID    combat-start-button
+    TestID Should Be Visible    combat-tracker
+    TestID Should Be Visible    freeform-mode-toggle
+
+    # Toggle Freeform Mode
+    Click TestID    freeform-mode-toggle
+
+    # Verify GM can see move up / down buttons on turn queue items
+    ${first_item}=    Get Element    css=[data-testid="turn-queue-item"]:first-child
+    ${second_item}=    Get Element    css=[data-testid="turn-queue-item"]:nth-child(2)
+    Get Element    css=[data-testid^="turn-queue-move-down-"]
+    Get Element    css=[data-testid^="turn-queue-move-up-"]
+
+    # Player views same room
+    Switch Context    ${player_ctx}
+    Go To    ${HOME}
+    Click Campaign Named    Reorder Campaign
+    Click    css=[data-testid="session-item"]:has-text("Reorder Arena")
+    TestID Should Be Visible    combat-tracker
+    # Player should NOT see move up or move down buttons
+    Wait For Elements State    css=[data-testid^="turn-queue-move-up-"]    hidden
+    Wait For Elements State    css=[data-testid^="turn-queue-move-down-"]    hidden
+
+    # GM ends combat
+    Switch Context    ${gm_ctx}
+    Click TestID    combat-end-button
+    Wait For Elements State    css=[data-testid="combat-tracker"]    hidden

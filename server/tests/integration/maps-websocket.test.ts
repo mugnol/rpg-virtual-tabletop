@@ -336,6 +336,43 @@ describe("WebSocket Real-time Maps, Tokens & Combat (BR-35..BR-50)", () => {
     expect((settingsWsMsg.combat as any).chaosMode).toBe(true);
     expect((settingsWsMsg.combat as any).groupMonsterInitiative).toBe(true);
 
+    // Player attempts to reorder turn queue over WebSocket -> receives error FORBIDDEN
+    const playerReorderErrorPromise = waitForMessage(playerWs, (msg) => msg.type === "error");
+    playerWs.send(
+      JSON.stringify({
+        type: "reorder_turn_queue",
+        mapId,
+        orderedTokenIds: [trollId, tokenId],
+      }),
+    );
+    const playerReorderError = await playerReorderErrorPromise;
+    expect(playerReorderError.code).toBe("FORBIDDEN");
+
+    // GM reorders turn queue via WebSocket; player receives turn_queue_reordered
+    const gmReorderPromise = waitForMessage(playerWs, (msg) => msg.type === "turn_queue_reordered");
+    gmWs.send(
+      JSON.stringify({
+        type: "reorder_turn_queue",
+        mapId,
+        orderedTokenIds: [trollId, tokenId],
+      }),
+    );
+    const gmReorderMsg = await gmReorderPromise;
+    expect((gmReorderMsg.combat as any).turnOrder).toEqual([trollId, tokenId]);
+
+    // GM moves token down by 1 position via WebSocket
+    const gmMoveDownPromise = waitForMessage(playerWs, (msg) => msg.type === "turn_queue_reordered");
+    gmWs.send(
+      JSON.stringify({
+        type: "reorder_turn_queue",
+        mapId,
+        tokenId: trollId,
+        direction: "down",
+      }),
+    );
+    const gmMoveDownMsg = await gmMoveDownPromise;
+    expect((gmMoveDownMsg.combat as any).turnOrder).toEqual([tokenId, trollId]);
+
     // GM ends combat; playerWs receives combat_ended
     const endPromise = waitForMessage(playerWs, (msg) => msg.type === "combat_ended");
     gmWs.send(JSON.stringify({ type: "end_combat", mapId }));

@@ -3,7 +3,7 @@
 **Document ID:** SPEC-F-08  
 **Module:** Turn-Based Combat & Campaign Turn Queue (Phase 4)  
 **Status:** Approved  
-**Related Requirements:** BR-43..BR-50, UC-39..UC-50
+**Related Requirements:** BR-43..BR-50, UC-39..UC-51
 
 ---
 
@@ -100,7 +100,19 @@ This specification defines the turn-based tactical combat engine and campaign tu
   - Status is flagged as defeated / unconscious, and if the target is a player character (`CHARACTER`) in active combat, a personal `dying` round timer is automatically started if not already present.
 - Real-time combat event is broadcast to all clients and logged to session chat.
 
-### BR-48: Round Progression & Personal/GM Round Timer Countdowns
+### BR-49: GM Manual Turn Queue Reorganization & Freeform Mode
+- Only users with the **GM** role can manually reorganize or reorder the participants in the active Turn Queue:
+  - The GM may move any participant up or down by one position (`moveTurnQueueEntry`), or provide a full reordered list of participant token IDs (`reorderTurnQueue`).
+  - Unauthorized reorder requests from non-GM players are rejected with `403 FORBIDDEN`.
+- **Active Turn & Index Preservation**:
+  - Reordering the Turn Queue strictly preserves the currently active combatant (`activeTurnEntityId`).
+  - The `turnIndex` is recalculated to match the new position of `activeTurnEntityId` in `turnOrder` (`turnIndex = turnOrder.indexOf(activeTurnEntityId)`).
+  - If the active combatant itself was moved, or other combatants were moved above/below it, the active combatant continues their active turn without interruption.
+- **Freeform / Round-Robin Mode (`freeformMode`)**:
+  - The GM can toggle `freeformMode: true` on `CombatState`.
+  - When in Freeform Mode or following a manual GM reorder, the custom order established by the GM is respected and not automatically overwritten by initiative scores unless the GM explicitly triggers an encounter-wide initiative re-roll.
+
+### BR-50: Round Progression & Personal/GM Round Timer Countdowns
 - Combat supports personal (participant-scoped) and GM (encounter-scoped) round timers for tracking effects such as:
   - `spell`: Spell durations (e.g., *Bless*, *Protection from Evil*).
   - `light`: Light source countdowns (e.g., *Torch*, *Lantern*).
@@ -181,3 +193,9 @@ This specification defines the turn-based tactical combat engine and campaign tu
 ### UC-50: Manual Initiative Override & Late-Joining Combatants
 1. During active combat, the GM manually sets/overrides a participant's initiative score or spawns a new monster / adds a late-joining character and rolls its initiative.
 2. The Turn Queue immediately re-sorts in descending initiative order and broadcasts the updated `FormattedCombatState` to all connected clients via WebSockets.
+
+### UC-51: GM Manual Turn Queue Reorganization & Freeform Mode
+1. During active combat, the GM clicks "Move Up" (`↑`) or "Move Down" (`↓`) on a combatant's card in the Turn Tracker (or submits a reordered list of combatant IDs).
+2. The server reorganizes the Turn Queue order while preserving the current `activeTurnEntityId` and adjusting `turnIndex` to the new position of the active combatant.
+3. The GM toggles "Freeform Mode" (`freeformMode: true`), allowing purely narrative or round-robin custom turn order.
+4. Non-GM players see the updated turn order in real-time but do not have access to reorder controls. Attempts by players to send reorder requests are rejected with `403 FORBIDDEN`.

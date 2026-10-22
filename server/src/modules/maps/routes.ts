@@ -4,6 +4,7 @@ import { requireAuth } from "../../middleware/auth.js";
 import {
   combatAttackSchema,
   combatNextSchema,
+  combatReorderSchema,
   combatRollInitiativeSchema,
   combatSetInitiativeSchema,
   combatSettingsSchema,
@@ -28,6 +29,7 @@ import {
   placeToken,
   previousCombatTurn,
   removeCombatTimer,
+  reorderCombatTurnQueue,
   rollCombatInitiative,
   setCombatInitiative,
   startCombat,
@@ -129,6 +131,15 @@ mapsRouter.post(
   asyncHandler(async (req, res) => {
     const input = parseBody(combatSurpriseSchema, req.body);
     const result = await toggleTokenSurprise(req.user!.id, req.params.id, input);
+    res.json(result);
+  }),
+);
+
+mapsRouter.post(
+  "/:id/combat/reorder",
+  asyncHandler(async (req, res) => {
+    const input = parseBody(combatReorderSchema, req.body ?? {});
+    const result = await reorderCombatTurnQueue(req.user!.id, req.params.id, input);
     res.json(result);
   }),
 );

@@ -487,6 +487,7 @@ export interface CombatState {
   chaosMode?: boolean;
   groupMonsterInitiative?: boolean;
   isSurpriseRound?: boolean;
+  freeformMode?: boolean;
 }
 
 export interface SessionMap {
@@ -589,9 +590,16 @@ export function toggleTokenSurprise(
 
 export function updateCombatSettings(
   mapId: string,
-  input: { chaosMode?: boolean; groupMonsterInitiative?: boolean },
+  input: { chaosMode?: boolean; groupMonsterInitiative?: boolean; freeformMode?: boolean },
 ): Promise<{ combat: CombatState; tokens: MapToken[] }> {
   return request("PATCH", `/maps/${mapId}/combat/settings`, input);
+}
+
+export function reorderCombatTurnQueue(
+  mapId: string,
+  input: { orderedTokenIds?: string[]; tokenId?: string; direction?: "up" | "down" },
+): Promise<{ combat: CombatState; tokens: MapToken[] }> {
+  return request("POST", `/maps/${mapId}/combat/reorder`, input);
 }
 
 export function nextCombatTurn(mapId: string): Promise<{ combat: CombatState }> {

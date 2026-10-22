@@ -4,6 +4,8 @@ import {
   buildTurnQueue,
   doubleDiceCount,
   hasThiefInitiativeTalent,
+  moveTurnQueueEntry,
+  reorderTurnQueue,
   resolveAttack,
   revertTurn,
   rollEncounterInitiative,
@@ -214,6 +216,51 @@ describe("Combat Engine (BR-43..BR-50)", () => {
         hasInitiativeAdvantage: false,
         isActive: false,
       });
+    });
+  });
+
+  describe("GM Manual Turn Queue Reorganization (BR-49)", () => {
+    it("moves an entry up or down by 1 position and updates turnOrder", () => {
+      const initialOrder = ["t1", "t2", "t3"];
+      // Move t2 up -> ["t2", "t1", "t3"]
+      const movedUp = moveTurnQueueEntry(initialOrder, "t2", "up", "t1");
+      expect(movedUp.turnOrder).toEqual(["t2", "t1", "t3"]);
+      expect(movedUp.activeTokenId).toBe("t1");
+      expect(movedUp.turnIndex).toBe(1);
+
+      // Move t2 down -> ["t1", "t2", "t3"]
+      const movedDown = moveTurnQueueEntry(movedUp.turnOrder, "t2", "down", "t1");
+      expect(movedDown.turnOrder).toEqual(["t1", "t2", "t3"]);
+      expect(movedDown.turnIndex).toBe(0);
+    });
+
+    it("clamps boundaries when moving top element up or bottom element down", () => {
+      const order = ["t1", "t2", "t3"];
+      const clampUp = moveTurnQueueEntry(order, "t1", "up", "t1");
+      expect(clampUp.turnOrder).toEqual(["t1", "t2", "t3"]);
+      expect(clampUp.turnIndex).toBe(0);
+
+      const clampDown = moveTurnQueueEntry(order, "t3", "down", "t1");
+      expect(clampDown.turnOrder).toEqual(["t1", "t2", "t3"]);
+      expect(clampDown.turnIndex).toBe(0);
+    });
+
+    it("strictly preserves active combatant when the active combatant itself moves", () => {
+      const order = ["t1", "t2", "t3"];
+      // t2 is active (index 1), moves up to index 0
+      const res = moveTurnQueueEntry(order, "t2", "up", "t2");
+      expect(res.turnOrder).toEqual(["t2", "t1", "t3"]);
+      expect(res.activeTokenId).toBe("t2");
+      expect(res.turnIndex).toBe(0);
+    });
+
+    it("reorders turn queue with arbitrary custom sequence and recalculates active index", () => {
+      const order = ["t1", "t2", "t3", "t4"];
+      const newSequence = ["t4", "t2", "t1", "t3"];
+      const res = reorderTurnQueue(order, newSequence, "t2");
+      expect(res.turnOrder).toEqual(["t4", "t2", "t1", "t3"]);
+      expect(res.activeTokenId).toBe("t2");
+      expect(res.turnIndex).toBe(1);
     });
   });
 

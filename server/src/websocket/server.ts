@@ -17,6 +17,7 @@ import {
   placeToken,
   previousCombatTurn,
   removeCombatTimer,
+  reorderCombatTurnQueue,
   rollCombatInitiative,
   setCombatInitiative,
   startCombat,
@@ -566,15 +567,51 @@ export function attachWebSocketServer(server: http.Server): WebSocketServer {
                   typeof payload.groupMonsterInitiative === "boolean"
                     ? payload.groupMonsterInitiative
                     : undefined;
+                const freeformMode =
+                  typeof payload.freeformMode === "boolean" ? payload.freeformMode : undefined;
                 const res = await updateCombatSettings(user.id, mapId, {
                   chaosMode,
                   groupMonsterInitiative,
+                  freeformMode,
                 });
                 broadcastToRoom(sessionId, {
                   type: "initiative_updated",
                   mapId,
                   combat: res.combat,
                   tokens: res.tokens,
+                });
+                break;
+              }
+
+              case "reorder_turn_queue": {
+                if (!isOwner) {
+                  ws.send(
+                    JSON.stringify({
+                      type: "error",
+                      code: "FORBIDDEN",
+                      message: "Only the GM can reorder the turn queue",
+                    }),
+                  );
+                  return;
+                }
+                const mapId = typeof payload.mapId === "string" ? payload.mapId : "";
+                const orderedTokenIds = Array.isArray(payload.orderedTokenIds)
+                  ? (payload.orderedTokenIds as string[])
+                  : undefined;
+                const tokenId = typeof payload.tokenId === "string" ? payload.tokenId : undefined;
+                const direction =
+                  payload.direction === "up" || payload.direction === "down"
+                    ? (payload.direction as "up" | "down")
+                    : undefined;
+                const res = await reorderCombatTurnQueue(user.id, mapId, {
+                  orderedTokenIds,
+                  tokenId,
+                  direction,
+                });
+                broadcastToRoom(sessionId, {
+                  type: "turn_queue_reordered",
+                  mapId,
+                  combat: res.combat,
                 });
                 break;
               }

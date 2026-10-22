@@ -236,7 +236,8 @@ export function SessionRoomPage() {
           }
 
           case "combat_started":
-          case "initiative_updated": {
+          case "initiative_updated":
+          case "turn_queue_reordered": {
             setError(null);
             setMap((prev) => {
               if (!prev || prev.id !== payload.mapId) return prev;
@@ -662,6 +663,31 @@ export function SessionRoomPage() {
     );
   }
 
+  function handleToggleFreeformMode() {
+    if (!wsRef.current || !map) return;
+    setError(null);
+    wsRef.current.send(
+      JSON.stringify({
+        type: "update_combat_settings",
+        mapId: map.id,
+        freeformMode: !map.combat?.freeformMode,
+      }),
+    );
+  }
+
+  function handleMoveQueueEntry(tokenId: string, direction: "up" | "down") {
+    if (!wsRef.current || !map) return;
+    setError(null);
+    wsRef.current.send(
+      JSON.stringify({
+        type: "reorder_turn_queue",
+        mapId: map.id,
+        tokenId,
+        direction,
+      }),
+    );
+  }
+
   if (loading) {
     return (
       <main data-testid="page-session" className="page">
@@ -887,6 +913,16 @@ export function SessionRoomPage() {
                     >
                       Chaos Mode: {map.combat?.chaosMode ? "ON" : "OFF"}
                     </button>
+                    <button
+                      data-testid="freeform-mode-toggle"
+                      type="button"
+                      className={`btn btn-sm ${
+                        map.combat?.freeformMode ? "btn-primary" : "btn-outline-secondary"
+                      }`}
+                      onClick={handleToggleFreeformMode}
+                    >
+                      Freeform: {map.combat?.freeformMode ? "ON" : "OFF"}
+                    </button>
                   </>
                 )}
               </div>
@@ -958,6 +994,24 @@ export function SessionRoomPage() {
                       </span>
                       {effectiveIsOwner && (
                         <span className="turn-queue-gm-controls">
+                          <button
+                            data-testid={`turn-queue-move-up-${participant.id}`}
+                            type="button"
+                            className="btn btn-secondary btn-xs"
+                            title="Move Up"
+                            onClick={() => handleMoveQueueEntry(participant.id, "up")}
+                          >
+                            ↑
+                          </button>
+                          <button
+                            data-testid={`turn-queue-move-down-${participant.id}`}
+                            type="button"
+                            className="btn btn-secondary btn-xs"
+                            title="Move Down"
+                            onClick={() => handleMoveQueueEntry(participant.id, "down")}
+                          >
+                            ↓
+                          </button>
                           <button
                             data-testid={`surprise-toggle-${participant.id}`}
                             type="button"
