@@ -175,22 +175,28 @@ model MapToken {
   attackBonus      Int             @default(0)
   damageFormula    String          @default("1d6")
   initiative       Int             @default(0)
+  dexModifier      Int             @default(0)
+  hasSurprise      Boolean         @default(false)
+  initiativeMeta   String          @default("{}")
   createdAt        DateTime        @default(now())
   updatedAt        DateTime        @updatedAt
 }
 
 model CombatState {
-  id            String     @id @default(cuid())
-  mapId         String     @unique
-  map           SessionMap @relation(fields: [mapId], references: [id], onDelete: Cascade)
-  active        Boolean    @default(false)
-  round         Int        @default(1)
-  turnIndex     Int        @default(0)
-  activeTokenId String?
-  turnOrder     String     @default("[]")
-  timers        String     @default("[]")
-  createdAt     DateTime   @default(now())
-  updatedAt     DateTime   @updatedAt
+  id                     String     @id @default(cuid())
+  mapId                  String     @unique
+  map                    SessionMap @relation(fields: [mapId], references: [id], onDelete: Cascade)
+  active                 Boolean    @default(false)
+  round                  Int        @default(1)
+  turnIndex              Int        @default(0)
+  activeTokenId          String?
+  turnOrder              String     @default("[]")
+  timers                 String     @default("[]")
+  chaosMode              Boolean    @default(false)
+  groupMonsterInitiative Boolean    @default(false)
+  isSurpriseRound        Boolean    @default(false)
+  createdAt              DateTime   @default(now())
+  updatedAt              DateTime   @updatedAt
 }
 
 model ThemeConfig {

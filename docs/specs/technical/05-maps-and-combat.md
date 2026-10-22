@@ -47,27 +47,42 @@ model MapToken {
   attackBonus      Int             @default(0)
   damageFormula    String          @default("1d6")
   initiative       Int             @default(0)
+  dexModifier      Int             @default(0)
+  hasSurprise      Boolean         @default(false)
+  initiativeMeta   String          @default("{}") // JSON serialized InitiativeRollMeta
   createdAt        DateTime        @default(now())
   updatedAt        DateTime        @updatedAt
 }
 
 model CombatState {
-  id            String     @id @default(cuid())
-  mapId         String     @unique
-  map           SessionMap @relation(fields: [mapId], references: [id], onDelete: Cascade)
-  active        Boolean    @default(false)
-  round         Int        @default(1)
-  turnIndex     Int        @default(0)
-  activeTokenId String?
-  turnOrder     String     @default("[]") // JSON serialized Array<string> of MapToken IDs
-  timers        String     @default("[]") // JSON serialized Array<CombatTimer>
-  createdAt     DateTime   @default(now())
-  updatedAt     DateTime   @updatedAt
+  id                     String     @id @default(cuid())
+  mapId                  String     @unique
+  map                    SessionMap @relation(fields: [mapId], references: [id], onDelete: Cascade)
+  active                 Boolean    @default(false)
+  round                  Int        @default(1)
+  turnIndex              Int        @default(0)
+  activeTokenId          String?
+  turnOrder              String     @default("[]") // JSON serialized Array<string> of MapToken IDs
+  timers                 String     @default("[]") // JSON serialized Array<CombatTimer>
+  chaosMode              Boolean    @default(false)
+  groupMonsterInitiative Boolean    @default(false)
+  isSurpriseRound        Boolean    @default(false)
+  createdAt              DateTime   @default(now())
+  updatedAt              DateTime   @updatedAt
 }
 ```
 
-### 1.2 Turn Queue & Timer DTOs
+### 1.2 Turn Queue, Initiative & Timer DTOs
 ```ts
+export interface InitiativeRollMeta {
+  dice: number[];
+  keptDie: number;
+  dexModifier: number;
+  total: number;
+  hasAdvantage: boolean;
+  formula: string;
+}
+
 export interface TurnQueueEntry {
   id: string;
   entityId: string;
@@ -75,6 +90,10 @@ export interface TurnQueueEntry {
   type: "CHARACTER" | "MONSTER";
   entityType: "character" | "monster";
   initiative: number;
+  dexModifier: number;
+  hasSurprise: boolean;
+  hasInitiativeAdvantage: boolean;
+  initiativeMeta: InitiativeRollMeta | null;
   ownerId: string | null;
   characterSheetId: string | null;
   hpCurrent: number;
@@ -108,6 +127,9 @@ export interface FormattedCombatState {
   turnOrder: string[];
   turnQueue: TurnQueueEntry[];
   timers: CombatTimer[];
+  chaosMode: boolean;
+  groupMonsterInitiative: boolean;
+  isSurpriseRound: boolean;
 }
 ```
 
@@ -133,11 +155,19 @@ export interface FormattedCombatState {
 - `DELETE /api/tokens/:tokenId` (GM only)
   - Removes a token from the map (and removes from active `turnQueue` if present).
 
-### 2.3 Combat & Turn Queue Controls
+### 2.3 Combat, Initiative & Turn Queue Controls
 - `POST /api/maps/:mapId/combat/start` (GM only)
-  - Rolls initiative for all `CHARACTER` (`character`) and `MONSTER` (`monster`) participants, initializes `turnOrder` / `turnQueue`, sets `round` / `roundNumber` to 1, `activeTokenId` / `activeTurnEntityId` to the first participant, and activates combat.
+  - Rolls initiative for all `CHARACTER` (`character`) and `MONSTER` (`monster`) participants (respecting `groupMonsterInitiative`, Thief initiative advantage `2d20kh1 + DEX`, and `hasSurprise`), initializes `turnOrder` / `turnQueue`, sets `round` / `roundNumber` to 1, `activeTokenId` / `activeTurnEntityId` to the first participant, and activates combat.
+- `POST /api/maps/:mapId/combat/initiative/roll` (GM or Campaign Participant)
+  - Rolls initiative (`1d20 + DEX` or `2d20kh1 + DEX` for Thief talent) for a specific `tokenId` (owned by player or any if GM) or all combatants (GM), re-sorts the Turn Queue, logs the roll to session chat, and broadcasts updated combat state.
+- `PATCH /api/maps/:mapId/combat/initiative` / `POST /api/maps/:mapId/combat/initiative` (GM only)
+  - Manually sets/overrides a participant's `initiative` score (`{ tokenId, initiative }`), re-sorts the Turn Queue, and broadcasts updated state.
+- `POST /api/maps/:mapId/combat/surprise` (GM only)
+  - Toggles or sets `hasSurprise` (`{ tokenId, hasSurprise }`) on a participant and re-sorts the Turn Queue.
+- `PATCH /api/maps/:mapId/combat/settings` (GM only)
+  - Updates combat encounter settings (`{ chaosMode?, groupMonsterInitiative? }`) and broadcasts updated combat state.
 - `POST /api/maps/:mapId/combat/next` (GM or active player)
-  - Advances turn to next participant in queue. On full queue cycle wrap (`turnIndex` wraps to 0), increments `roundNumber` and decrements all active `timers` by 1 round.
+  - Advances turn to next participant in queue. On full queue cycle wrap (`turnIndex` wraps to 0), increments `roundNumber`, decrements all active `timers` by 1 round, clears `isSurpriseRound`, and if `chaosMode` is active, automatically re-rolls initiative and re-sorts the Turn Queue for the new round.
 - `POST /api/maps/:mapId/combat/end-turn` (Active player or GM)
   - Allows the active player to end their own character's turn and advance the queue to the next participant.
 - `POST /api/maps/:mapId/combat/prev` (GM only)
@@ -162,7 +192,11 @@ Clients connected to `/ws/sessions/:id` exchange map and combat messages:
 - `place_token`: `{ type: "place_token", mapId, token }`
 - `move_token`: `{ type: "move_token", tokenId, x, y }`
 - `delete_token`: `{ type: "delete_token", tokenId }`
-- `start_combat`: `{ type: "start_combat", mapId }`
+- `start_combat`: `{ type: "start_combat", mapId, groupMonsterInitiative?, chaosMode? }`
+- `roll_initiative`: `{ type: "roll_initiative", mapId, tokenId? }`
+- `set_initiative`: `{ type: "set_initiative", mapId, tokenId, initiative }`
+- `toggle_surprise`: `{ type: "toggle_surprise", mapId, tokenId, hasSurprise? }`
+- `update_combat_settings`: `{ type: "update_combat_settings", mapId, chaosMode?, groupMonsterInitiative? }`
 - `next_turn`: `{ type: "next_turn", mapId }`
 - `end_turn`: `{ type: "end_turn", mapId }`
 - `prev_turn`: `{ type: "prev_turn", mapId }`
@@ -174,12 +208,13 @@ Clients connected to `/ws/sessions/:id` exchange map and combat messages:
 ### 3.2 Server -> Client Broadcasts
 - `session_state`: Extended to include `maps: Array<SessionMapWithTokensAndCombat>`.
 - `map_updated`: `{ type: "map_updated", map: SessionMap }`
-- `token_placed`: `{ type: "token_placed", mapId, token: MapToken }`
+- `token_placed`: `{ type: "token_placed", mapId, token: MapToken, combat?: FormattedCombatState }`
 - `token_moved`: `{ type: "token_moved", token: MapToken }`
-- `token_updated`: `{ type: "token_updated", token: MapToken }`
-- `token_deleted`: `{ type: "token_deleted", tokenId: string }`
+- `token_updated`: `{ type: "token_updated", token: MapToken, combat?: FormattedCombatState }`
+- `token_deleted`: `{ type: "token_deleted", tokenId: string, combat?: FormattedCombatState }`
 - `combat_started`: `{ type: "combat_started", mapId, combat: FormattedCombatState, tokens: MapToken[] }`
-- `turn_changed`: `{ type: "turn_changed", mapId, combat: FormattedCombatState }`
+- `initiative_updated`: `{ type: "initiative_updated", mapId, combat: FormattedCombatState, tokens: MapToken[] }`
+- `turn_changed`: `{ type: "turn_changed", mapId, combat: FormattedCombatState, tokens?: MapToken[] }`
 - `combat_timer_updated`: `{ type: "combat_timer_updated", mapId, combat: FormattedCombatState }`
 - `combat_attack`: `{ type: "combat_attack", mapId, attack: CombatAttackResult, targetToken: MapToken, combat?: FormattedCombatState }`
 - `combat_ended`: `{ type: "combat_ended", mapId, combat: FormattedCombatState }`
@@ -187,6 +222,24 @@ Clients connected to `/ws/sessions/:id` exchange map and combat messages:
 ---
 
 ## 4. Combat Resolution & Turn Queue Engine
+
+### 4.0 Initiative Calculation, Advantage, Grouping & Sorting (`combat.ts`)
+1. **`hasThiefInitiativeTalent(characterClass, talents)`**:
+   - Inspects character talents (and class features) for `"Gain advantage on initiative rolls"`, `"Initiative Advantage"`, or `"advantage on initiative"`.
+2. **`rollInitiative(dexModifier, forcedRollOrOptions)`**:
+   - Standard roll: `1d20 + dexModifier`.
+   - With advantage (`hasAdvantage: true` or Thief talent active): rolls two d20s (`2d20kh1 + dexModifier`), keeps `Math.max(d1, d2)`, and records `dice: [d1, d2]`, `keptDie`, `dexModifier`, `total`, `hasAdvantage: true`, and `formula` in metadata.
+3. **`rollEncounterInitiative(combatants, options)`**:
+   - Supports `groupMonsterInitiative: boolean`:
+     - When `false` (Individual Monster Initiative): each combatant rolls its own initiative (`1d20 + dexModifier` or `2d20kh1 + dexModifier`).
+     - When `true` (Grouped Monster Initiative): all `MONSTER` combatants share a single `1d20 + max(monster.dexModifier)` initiative score, while each `CHARACTER` rolls individually.
+4. **`sortInitiative(tokens, options)`**:
+   - Sorts combatants by:
+     1. `hasSurprise` (`true` before `false` when `isSurpriseRound !== false`).
+     2. Descending `initiative` score.
+     3. Descending `dexModifier`.
+     4. Entity priority (`CHARACTER` before `MONSTER`).
+     5. Stable `id` comparison.
 
 ### 4.1 Turn Queue Progression & Timer Ticking
 1. **`advanceTurn(turnOrder, currentTurnIndex, currentRound)`**:
@@ -250,7 +303,18 @@ Clients connected to `/ws/sessions/:id` exchange map and combat messages:
 | Turn Queue Item | `turn-queue-item` | Participant card in the turn queue |
 | Turn Queue Participant Name | `turn-queue-name` | Participant name in the turn queue |
 | Turn Queue Participant Type | `turn-queue-type` | Participant type badge (`character` or `monster`) |
-| Turn Queue Initiative | `turn-queue-initiative` | Participant initiative score |
+| Turn Queue Initiative | `turn-queue-initiative` | Participant initiative score badge |
+| Initiative Badge (`tokenId`) | `initiative-badge-${tokenId}` | Token-specific initiative badge in queue |
+| Advantage Badge | `initiative-advantage-badge` | Badge indicating `2d20kh1` Thief advantage |
+| Surprise Badge | `surprise-badge` | Badge indicating participant has Surprise (`hasSurprise: true`) |
+| Surprise Toggle Button (GM) | `surprise-toggle-${tokenId}` | Toggles `hasSurprise` on a participant |
+| Roll Initiative Button | `roll-initiative-button` | Rolls initiative for active player's character or all combatants (GM) |
+| Token Roll Initiative Button | `roll-initiative-${tokenId}` | Rolls initiative for a specific token |
+| Initiative Override Input (GM) | `initiative-input-${tokenId}` | Input to manually set/override a token's initiative |
+| Initiative Override Set Button (GM) | `initiative-set-${tokenId}` | Applies manual initiative override |
+| Grouped Monster Initiative Toggle (GM) | `group-monster-initiative-toggle` | Toggles grouped vs individual monster initiative |
+| Chaos Mode Toggle (GM) | `chaos-mode-toggle` | Toggles Chaos Mode (re-roll initiative every round) |
+| Surprise Round Banner | `surprise-round-banner` | Indicates active Surprise Round |
 | Turn Queue HP | `turn-queue-hp` | Participant HP in the turn queue |
 | Turn Queue Active Badge | `turn-queue-active-badge` | Active turn badge on current participant |
 | Start Combat Button (GM) | `combat-start-button` | Initiates turn-based combat |

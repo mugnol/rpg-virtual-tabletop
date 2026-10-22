@@ -3,6 +3,12 @@ import { asyncHandler, parseBody } from "../../lib/http.js";
 import { requireAuth } from "../../middleware/auth.js";
 import {
   combatAttackSchema,
+  combatNextSchema,
+  combatRollInitiativeSchema,
+  combatSetInitiativeSchema,
+  combatSettingsSchema,
+  combatStartSchema,
+  combatSurpriseSchema,
   combatTimerCreateSchema,
   mapCreateSchema,
   mapUpdateSchema,
@@ -22,7 +28,11 @@ import {
   placeToken,
   previousCombatTurn,
   removeCombatTimer,
+  rollCombatInitiative,
+  setCombatInitiative,
   startCombat,
+  toggleTokenSurprise,
+  updateCombatSettings,
   updateMap,
 } from "./service.js";
 
@@ -81,7 +91,53 @@ mapsRouter.post(
 mapsRouter.post(
   "/:id/combat/start",
   asyncHandler(async (req, res) => {
-    const result = await startCombat(req.user!.id, req.params.id);
+    const input = parseBody(combatStartSchema, req.body ?? {});
+    const result = await startCombat(req.user!.id, req.params.id, input);
+    res.json(result);
+  }),
+);
+
+mapsRouter.post(
+  "/:id/combat/initiative/roll",
+  asyncHandler(async (req, res) => {
+    const input = parseBody(combatRollInitiativeSchema, req.body ?? {});
+    const result = await rollCombatInitiative(req.user!.id, req.params.id, input);
+    res.json(result);
+  }),
+);
+
+mapsRouter.patch(
+  "/:id/combat/initiative",
+  asyncHandler(async (req, res) => {
+    const input = parseBody(combatSetInitiativeSchema, req.body);
+    const result = await setCombatInitiative(req.user!.id, req.params.id, input);
+    res.json(result);
+  }),
+);
+
+mapsRouter.post(
+  "/:id/combat/initiative",
+  asyncHandler(async (req, res) => {
+    const input = parseBody(combatSetInitiativeSchema, req.body);
+    const result = await setCombatInitiative(req.user!.id, req.params.id, input);
+    res.json(result);
+  }),
+);
+
+mapsRouter.post(
+  "/:id/combat/surprise",
+  asyncHandler(async (req, res) => {
+    const input = parseBody(combatSurpriseSchema, req.body);
+    const result = await toggleTokenSurprise(req.user!.id, req.params.id, input);
+    res.json(result);
+  }),
+);
+
+mapsRouter.patch(
+  "/:id/combat/settings",
+  asyncHandler(async (req, res) => {
+    const input = parseBody(combatSettingsSchema, req.body ?? {});
+    const result = await updateCombatSettings(req.user!.id, req.params.id, input);
     res.json(result);
   }),
 );
@@ -89,7 +145,8 @@ mapsRouter.post(
 mapsRouter.post(
   "/:id/combat/next",
   asyncHandler(async (req, res) => {
-    const combat = await nextCombatTurn(req.user!.id, req.params.id);
+    const input = parseBody(combatNextSchema, req.body ?? {});
+    const combat = await nextCombatTurn(req.user!.id, req.params.id, input);
     res.json({ combat });
   }),
 );
@@ -97,7 +154,8 @@ mapsRouter.post(
 mapsRouter.post(
   "/:id/combat/end-turn",
   asyncHandler(async (req, res) => {
-    const combat = await nextCombatTurn(req.user!.id, req.params.id);
+    const input = parseBody(combatNextSchema, req.body ?? {});
+    const combat = await nextCombatTurn(req.user!.id, req.params.id, input);
     res.json({ combat });
   }),
 );

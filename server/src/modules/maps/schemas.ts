@@ -35,6 +35,8 @@ export const tokenCreateSchema = z.object({
   attackBonus: z.number().int().optional(),
   damageFormula: z.string().optional(),
   initiative: z.number().int().optional(),
+  dexModifier: z.number().int().optional(),
+  hasSurprise: z.boolean().optional(),
 });
 
 export const tokenUpdateSchema = z.object({
@@ -49,6 +51,42 @@ export const tokenUpdateSchema = z.object({
   attackBonus: z.number().int().optional(),
   damageFormula: z.string().optional(),
   initiative: z.number().int().optional(),
+  dexModifier: z.number().int().optional(),
+  hasSurprise: z.boolean().optional(),
+});
+
+export const combatStartSchema = z.object({
+  chaosMode: z.boolean().optional(),
+  groupMonsterInitiative: z.boolean().optional(),
+  forcedRollsById: z.record(z.string(), z.array(z.number().int())).optional(),
+  forcedGroupMonsterRoll: z.number().int().min(1).max(20).optional(),
+});
+
+export const combatNextSchema = z.object({
+  forcedRollsById: z.record(z.string(), z.array(z.number().int())).optional(),
+  forcedGroupMonsterRoll: z.number().int().min(1).max(20).optional(),
+});
+
+export const combatRollInitiativeSchema = z.object({
+  tokenId: z.string().optional(),
+  forcedRolls: z.array(z.number().int()).optional(),
+  forcedRollsById: z.record(z.string(), z.array(z.number().int())).optional(),
+  forcedGroupMonsterRoll: z.number().int().min(1).max(20).optional(),
+});
+
+export const combatSetInitiativeSchema = z.object({
+  tokenId: z.string().min(1),
+  initiative: z.number().int(),
+});
+
+export const combatSurpriseSchema = z.object({
+  tokenId: z.string().min(1),
+  hasSurprise: z.boolean().optional(),
+});
+
+export const combatSettingsSchema = z.object({
+  chaosMode: z.boolean().optional(),
+  groupMonsterInitiative: z.boolean().optional(),
 });
 
 export const combatAttackSchema = z.object({
@@ -69,5 +107,11 @@ export type MapCreateInput = z.infer<typeof mapCreateSchema>;
 export type MapUpdateInput = z.infer<typeof mapUpdateSchema>;
 export type TokenCreateInput = z.infer<typeof tokenCreateSchema>;
 export type TokenUpdateInput = z.infer<typeof tokenUpdateSchema>;
+export type CombatStartInput = z.infer<typeof combatStartSchema>;
+export type CombatNextInput = z.infer<typeof combatNextSchema>;
+export type CombatRollInitiativeInput = z.infer<typeof combatRollInitiativeSchema>;
+export type CombatSetInitiativeInput = z.infer<typeof combatSetInitiativeSchema>;
+export type CombatSurpriseInput = z.infer<typeof combatSurpriseSchema>;
+export type CombatSettingsInput = z.infer<typeof combatSettingsSchema>;
 export type CombatAttackInput = z.infer<typeof combatAttackSchema>;
 export type CombatTimerCreateInput = z.infer<typeof combatTimerCreateSchema>;

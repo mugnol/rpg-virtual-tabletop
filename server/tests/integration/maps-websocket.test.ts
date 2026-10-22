@@ -277,6 +277,65 @@ describe("WebSocket Real-time Maps, Tokens & Combat (BR-35..BR-50)", () => {
     expect((prevTurnMsg.combat as any).activeTurnEntityId).toBe(trollId);
     expect((prevTurnMsg.combat as any).timers[0].remainingRounds).toBe(3);
 
+    // GM manually overrides Cave Troll's initiative via set_initiative; playerWs receives initiative_updated
+    const setInitPromise = waitForMessage(playerWs, (msg) => msg.type === "initiative_updated");
+    gmWs.send(
+      JSON.stringify({
+        type: "set_initiative",
+        mapId,
+        tokenId: trollId,
+        initiative: 25,
+      }),
+    );
+    const setInitMsg = await setInitPromise;
+    expect((setInitMsg.combat as any).turnQueue[0].entityId).toBe(trollId);
+    expect((setInitMsg.combat as any).turnQueue[0].initiative).toBe(25);
+
+    // Player rolls initiative for their own character via roll_initiative; both clients receive initiative_updated
+    const rollInitPromise = waitForMessage(playerWs, (msg) => msg.type === "initiative_updated");
+    playerWs.send(
+      JSON.stringify({
+        type: "roll_initiative",
+        mapId,
+        tokenId,
+        forcedRolls: [20],
+      }),
+    );
+    const rollInitMsg = await rollInitPromise;
+    const heroEntry = (rollInitMsg.combat as any).turnQueue.find(
+      (e: { entityId: string }) => e.entityId === tokenId,
+    );
+    expect(heroEntry.initiative).toBeGreaterThanOrEqual(20);
+
+    // GM toggles surprise on hero and enables chaosMode via WebSocket
+    const surpriseWsPromise = waitForMessage(playerWs, (msg) => msg.type === "initiative_updated");
+    gmWs.send(
+      JSON.stringify({
+        type: "toggle_surprise",
+        mapId,
+        tokenId,
+        hasSurprise: true,
+      }),
+    );
+    const surpriseWsMsg = await surpriseWsPromise;
+    const surprisedHero = (surpriseWsMsg.combat as any).turnQueue.find(
+      (e: { entityId: string }) => e.entityId === tokenId,
+    );
+    expect(surprisedHero.hasSurprise).toBe(true);
+
+    const settingsWsPromise = waitForMessage(playerWs, (msg) => msg.type === "initiative_updated");
+    gmWs.send(
+      JSON.stringify({
+        type: "update_combat_settings",
+        mapId,
+        chaosMode: true,
+        groupMonsterInitiative: true,
+      }),
+    );
+    const settingsWsMsg = await settingsWsPromise;
+    expect((settingsWsMsg.combat as any).chaosMode).toBe(true);
+    expect((settingsWsMsg.combat as any).groupMonsterInitiative).toBe(true);
+
     // GM ends combat; playerWs receives combat_ended
     const endPromise = waitForMessage(playerWs, (msg) => msg.type === "combat_ended");
     gmWs.send(JSON.stringify({ type: "end_combat", mapId }));

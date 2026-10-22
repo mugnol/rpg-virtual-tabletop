@@ -1,9 +1,21 @@
 import { rollDice } from "../dice/dice.js";
 
+export interface InitiativeRollMeta {
+  dice: number[];
+  keptDie: number;
+  dexModifier: number;
+  total: number;
+  hasAdvantage: boolean;
+  formula: string;
+}
+
 export interface Combatant {
   id: string;
   initiative: number;
   initiativeModifier?: number;
+  dexModifier?: number;
+  type?: string;
+  hasSurprise?: boolean;
   name?: string;
 }
 
@@ -14,6 +26,10 @@ export interface TurnQueueEntry {
   type: "CHARACTER" | "MONSTER";
   entityType: "character" | "monster";
   initiative: number;
+  dexModifier: number;
+  hasSurprise: boolean;
+  hasInitiativeAdvantage: boolean;
+  initiativeMeta: InitiativeRollMeta | null;
   ownerId: string | null;
   characterSheetId: string | null;
   hpCurrent: number;
@@ -44,6 +60,7 @@ export interface CombatAttackParams {
   targetHpCurrent: number;
   targetHpMax: number;
   forcedD20?: number;
+  hasAdvantage?: boolean;
 }
 
 export interface CombatAttackResult {
@@ -64,19 +81,305 @@ export interface CombatAttackResult {
   logMessage: string;
 }
 
-export function sortInitiative(combatants: Combatant[]): string[] {
+export function hasThiefInitiativeTalent(
+  characterClass?: string | null,
+  talents?: string[] | null,
+): boolean {
+  if (Array.isArray(talents)) {
+    for (const talent of talents) {
+      if (
+        typeof talent === "string" &&
+        /advantage on initiative|initiative advantage/i.test(talent)
+      ) {
+        return true;
+      }
+    }
+  }
+  return false;
+}
+
+function formatSignedModifier(mod: number): string {
+  return mod >= 0 ? `+${mod}` : `${mod}`;
+}
+
+export function rollInitiative(
+  dexModifier = 0,
+  forcedRollOrOptions?:
+    | number
+    | {
+        hasAdvantage?: boolean;
+        forcedRolls?: number[];
+        characterClass?: string | null;
+        talents?: string[] | null;
+      },
+): {
+  d20: number;
+  keptDie: number;
+  dice: number[];
+  modifier: number;
+  dexModifier: number;
+  total: number;
+  hasAdvantage: boolean;
+  formula: string;
+} {
+  const options =
+    typeof forcedRollOrOptions === "number"
+      ? { forcedRolls: [forcedRollOrOptions] }
+      : (forcedRollOrOptions ?? {});
+
+  const hasAdvantage = Boolean(
+    options.hasAdvantage ||
+      hasThiefInitiativeTalent(options.characterClass, options.talents),
+  );
+
+  const rollOne = (idx: number): number => {
+    const forced = options.forcedRolls?.[idx];
+    if (typeof forced === "number" && Number.isFinite(forced)) {
+      return Math.max(1, Math.min(20, Math.trunc(forced)));
+    }
+    return Math.floor(Math.random() * 20) + 1;
+  };
+
+  if (hasAdvantage) {
+    const d1 = rollOne(0);
+    const d2 =
+      options.forcedRolls && options.forcedRolls.length === 1
+        ? d1
+        : rollOne(1);
+    const keptDie = Math.max(d1, d2);
+    const total = keptDie + dexModifier;
+    const formula = `2d20kh1${formatSignedModifier(dexModifier)}`;
+    return {
+      d20: keptDie,
+      keptDie,
+      dice: [d1, d2],
+      modifier: dexModifier,
+      dexModifier,
+      total,
+      hasAdvantage: true,
+      formula,
+    };
+  }
+
+  const d1 = rollOne(0);
+  const total = d1 + dexModifier;
+  const formula = `1d20${formatSignedModifier(dexModifier)}`;
+  return {
+    d20: d1,
+    keptDie: d1,
+    dice: [d1],
+    modifier: dexModifier,
+    dexModifier,
+    total,
+    hasAdvantage: false,
+    formula,
+  };
+}
+
+export interface EncounterInitiativeParticipant {
+  id: string;
+  name: string;
+  type: "CHARACTER" | "MONSTER" | string;
+  dexModifier?: number;
+  characterClass?: string | null;
+  talents?: string[] | null;
+  hasAdvantage?: boolean;
+  hasSurprise?: boolean;
+}
+
+export interface EncounterInitiativeResultItem {
+  id: string;
+  name: string;
+  type: "CHARACTER" | "MONSTER";
+  initiative: number;
+  dexModifier: number;
+  hasSurprise: boolean;
+  meta: InitiativeRollMeta;
+}
+
+export function rollEncounterInitiative(
+  participants: EncounterInitiativeParticipant[],
+  options?: {
+    groupMonsterInitiative?: boolean;
+    forcedRollsById?: Record<string, number[]>;
+    forcedGroupMonsterRoll?: number;
+    defaultPcAdvantageBias?: boolean;
+    isSurpriseRound?: boolean;
+  },
+): {
+  results: EncounterInitiativeResultItem[];
+  turnOrder: string[];
+  isSurpriseRound: boolean;
+} {
+  const groupMonsters = Boolean(options?.groupMonsterInitiative);
+  const forcedById = options?.forcedRollsById ?? {};
+  const bias = Boolean(options?.defaultPcAdvantageBias);
+
+  const sampleDie = (isChar: boolean): number => {
+    if (bias) {
+      return isChar
+        ? Math.floor(Math.random() * 10) + 11
+        : Math.floor(Math.random() * 10) + 1;
+    }
+    return Math.floor(Math.random() * 20) + 1;
+  };
+
+  const monsters = participants.filter(
+    (p) => p.type.toUpperCase() === "MONSTER",
+  );
+  const highestMonsterDex =
+    monsters.length > 0
+      ? Math.max(...monsters.map((m) => m.dexModifier ?? 0))
+      : 0;
+
+  let sharedMonsterMeta: InitiativeRollMeta | null = null;
+  if (groupMonsters && monsters.length > 0) {
+    const groupDie =
+      options?.forcedGroupMonsterRoll !== undefined
+        ? options.forcedGroupMonsterRoll
+        : sampleDie(false);
+    const groupRoll = rollInitiative(highestMonsterDex, {
+      hasAdvantage: false,
+      forcedRolls: [groupDie],
+    });
+    sharedMonsterMeta = {
+      dice: groupRoll.dice,
+      keptDie: groupRoll.keptDie,
+      dexModifier: highestMonsterDex,
+      total: groupRoll.total,
+      hasAdvantage: false,
+      formula: groupRoll.formula,
+    };
+  }
+
+  const results: EncounterInitiativeResultItem[] = participants.map((p) => {
+    const upperType =
+      p.type.toUpperCase() === "CHARACTER" ? "CHARACTER" : "MONSTER";
+    const dexMod = p.dexModifier ?? 0;
+    const hasSurprise = Boolean(p.hasSurprise);
+
+    if (upperType === "MONSTER" && groupMonsters && sharedMonsterMeta) {
+      return {
+        id: p.id,
+        name: p.name,
+        type: "MONSTER",
+        initiative: sharedMonsterMeta.total,
+        dexModifier: dexMod,
+        hasSurprise,
+        meta: { ...sharedMonsterMeta },
+      };
+    }
+
+    const adv = Boolean(
+      p.hasAdvantage || hasThiefInitiativeTalent(p.characterClass, p.talents),
+    );
+    const forced = forcedById[p.id];
+    const generatedRolls =
+      forced && forced.length > 0
+        ? forced
+        : adv
+          ? [sampleDie(upperType === "CHARACTER"), sampleDie(upperType === "CHARACTER")]
+          : [sampleDie(upperType === "CHARACTER")];
+
+    const rolled = rollInitiative(dexMod, {
+      hasAdvantage: adv,
+      forcedRolls: generatedRolls,
+    });
+
+    return {
+      id: p.id,
+      name: p.name,
+      type: upperType,
+      initiative: rolled.total,
+      dexModifier: dexMod,
+      hasSurprise,
+      meta: {
+        dice: rolled.dice,
+        keptDie: rolled.keptDie,
+        dexModifier: dexMod,
+        total: rolled.total,
+        hasAdvantage: rolled.hasAdvantage,
+        formula: rolled.formula,
+      },
+    };
+  });
+
+  const isSurpriseRound =
+    options?.isSurpriseRound !== undefined
+      ? options.isSurpriseRound
+      : results.some((r) => r.hasSurprise);
+
+  const turnOrder = sortInitiative(
+    results.map((r) => ({
+      id: r.id,
+      name: r.name,
+      type: r.type,
+      initiative: r.initiative,
+      dexModifier: r.dexModifier,
+      hasSurprise: r.hasSurprise,
+    })),
+    { isSurpriseRound },
+  );
+
+  return {
+    results,
+    turnOrder,
+    isSurpriseRound,
+  };
+}
+
+export function sortInitiative(
+  combatants: Combatant[],
+  options?: { isSurpriseRound?: boolean },
+): string[] {
+  const considerSurprise = options?.isSurpriseRound !== false;
   const sorted = [...combatants].sort((a, b) => {
+    if (considerSurprise) {
+      const surpA = Boolean(a.hasSurprise);
+      const surpB = Boolean(b.hasSurprise);
+      if (surpA !== surpB) {
+        return surpB ? 1 : -1;
+      }
+    }
     if (b.initiative !== a.initiative) {
       return b.initiative - a.initiative;
     }
-    const modA = a.initiativeModifier ?? 0;
-    const modB = b.initiativeModifier ?? 0;
+    const modA = a.dexModifier ?? a.initiativeModifier ?? 0;
+    const modB = b.dexModifier ?? b.initiativeModifier ?? 0;
     if (modB !== modA) {
       return modB - modA;
+    }
+    const prioA = a.type?.toUpperCase() === "CHARACTER" ? 1 : a.type?.toUpperCase() === "MONSTER" ? 0 : 0;
+    const prioB = b.type?.toUpperCase() === "CHARACTER" ? 1 : b.type?.toUpperCase() === "MONSTER" ? 0 : 0;
+    if (prioB !== prioA) {
+      return prioB - prioA;
     }
     return a.id.localeCompare(b.id);
   });
   return sorted.map((c) => c.id);
+}
+
+function parseInitiativeMeta(raw?: string | InitiativeRollMeta | null): InitiativeRollMeta | null {
+  if (!raw) return null;
+  if (typeof raw === "object") {
+    return Array.isArray(raw.dice) ? raw : null;
+  }
+  try {
+    const parsed = JSON.parse(raw) as Partial<InitiativeRollMeta>;
+    if (Array.isArray(parsed.dice) && typeof parsed.total === "number") {
+      return {
+        dice: parsed.dice,
+        keptDie: typeof parsed.keptDie === "number" ? parsed.keptDie : parsed.dice[0] ?? 0,
+        dexModifier: typeof parsed.dexModifier === "number" ? parsed.dexModifier : 0,
+        total: parsed.total,
+        hasAdvantage: Boolean(parsed.hasAdvantage),
+        formula: typeof parsed.formula === "string" ? parsed.formula : "1d20",
+      };
+    }
+    return null;
+  } catch {
+    return null;
+  }
 }
 
 export function buildTurnQueue(
@@ -86,6 +389,9 @@ export function buildTurnQueue(
     name: string;
     type: string;
     initiative: number;
+    dexModifier?: number;
+    hasSurprise?: boolean;
+    initiativeMeta?: string | InitiativeRollMeta | null;
     ownerId?: string | null;
     characterSheetId?: string | null;
     hpCurrent: number;
@@ -102,6 +408,8 @@ export function buildTurnQueue(
     if (!token) continue;
     const upperType = token.type.toUpperCase();
     if (upperType !== "CHARACTER" && upperType !== "MONSTER") continue;
+    const meta = parseInitiativeMeta(token.initiativeMeta);
+    const dexModifier = token.dexModifier ?? meta?.dexModifier ?? 0;
     queue.push({
       id: token.id,
       entityId: token.id,
@@ -109,6 +417,10 @@ export function buildTurnQueue(
       type: upperType,
       entityType: upperType === "CHARACTER" ? "character" : "monster",
       initiative: token.initiative,
+      dexModifier,
+      hasSurprise: Boolean(token.hasSurprise),
+      hasInitiativeAdvantage: Boolean(meta?.hasAdvantage),
+      initiativeMeta: meta,
       ownerId: token.ownerId ?? null,
       characterSheetId: token.characterSheetId ?? null,
       hpCurrent: token.hpCurrent,

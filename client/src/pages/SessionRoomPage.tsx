@@ -47,6 +47,7 @@ export function SessionRoomPage() {
   const [timerCategory, setTimerCategory] = useState<"spell" | "light" | "dying" | "custom">("light");
   const [timerScope, setTimerScope] = useState<"personal" | "gm">("personal");
   const [timerRounds, setTimerRounds] = useState<string>("3");
+  const [initiativeOverrides, setInitiativeOverrides] = useState<Record<string, string>>({});
 
   // Token placement modal state
   const [isAddTokenOpen, setIsAddTokenOpen] = useState(false);
@@ -202,6 +203,7 @@ export function SessionRoomPage() {
               const exists = prev.tokens.some((t) => t.id === payload.token.id);
               return {
                 ...prev,
+                combat: payload.combat ?? prev.combat,
                 tokens: exists
                   ? prev.tokens.map((t) => (t.id === payload.token.id ? payload.token : t))
                   : [...prev.tokens, payload.token],
@@ -233,7 +235,8 @@ export function SessionRoomPage() {
             break;
           }
 
-          case "combat_started": {
+          case "combat_started":
+          case "initiative_updated": {
             setError(null);
             setMap((prev) => {
               if (!prev || prev.id !== payload.mapId) return prev;
@@ -254,6 +257,7 @@ export function SessionRoomPage() {
               return {
                 ...prev,
                 combat: payload.combat,
+                tokens: payload.tokens ?? prev.tokens,
               };
             });
             break;
@@ -588,6 +592,76 @@ export function SessionRoomPage() {
     );
   }
 
+  function handleRollInitiative(tokenId?: string) {
+    if (!wsRef.current || !map) return;
+    setError(null);
+    const resolvedTokenId =
+      tokenId ??
+      (!effectiveIsOwner
+        ? map.tokens.find((t) => t.type === "CHARACTER" && t.ownerId === user?.id)?.id
+        : undefined);
+    wsRef.current.send(
+      JSON.stringify({
+        type: "roll_initiative",
+        mapId: map.id,
+        tokenId: resolvedTokenId,
+      }),
+    );
+  }
+
+  function handleSetInitiative(tokenId: string, fallbackValue: number) {
+    if (!wsRef.current || !map) return;
+    setError(null);
+    const raw = initiativeOverrides[tokenId];
+    const parsed = raw !== undefined ? Number.parseInt(raw, 10) : fallbackValue;
+    if (Number.isNaN(parsed)) return;
+    wsRef.current.send(
+      JSON.stringify({
+        type: "set_initiative",
+        mapId: map.id,
+        tokenId,
+        initiative: parsed,
+      }),
+    );
+  }
+
+  function handleToggleSurprise(tokenId: string, currentSurprise: boolean) {
+    if (!wsRef.current || !map) return;
+    setError(null);
+    wsRef.current.send(
+      JSON.stringify({
+        type: "toggle_surprise",
+        mapId: map.id,
+        tokenId,
+        hasSurprise: !currentSurprise,
+      }),
+    );
+  }
+
+  function handleToggleChaosMode() {
+    if (!wsRef.current || !map) return;
+    setError(null);
+    wsRef.current.send(
+      JSON.stringify({
+        type: "update_combat_settings",
+        mapId: map.id,
+        chaosMode: !map.combat?.chaosMode,
+      }),
+    );
+  }
+
+  function handleToggleGroupMonsterInitiative() {
+    if (!wsRef.current || !map) return;
+    setError(null);
+    wsRef.current.send(
+      JSON.stringify({
+        type: "update_combat_settings",
+        mapId: map.id,
+        groupMonsterInitiative: !map.combat?.groupMonsterInitiative,
+      }),
+    );
+  }
+
   if (loading) {
     return (
       <main data-testid="page-session" className="page">
@@ -772,11 +846,65 @@ export function SessionRoomPage() {
                     : `⏳ Waiting for ${activeCombatant?.name ?? "Active Combatant"} to finish their turn`}
               </div>
 
+              {/* Surprise Round Banner */}
+              {map.combat?.isSurpriseRound && (
+                <div data-testid="surprise-round-banner" className="surprise-round-banner">
+                  ⚡ Surprise Round Active — Surprising combatants act first with advantage!
+                </div>
+              )}
+
+              {/* Initiative & Shadowdark Optional Rules Toolbar */}
+              <div className="combat-initiative-bar">
+                <button
+                  data-testid="roll-initiative-button"
+                  type="button"
+                  className="btn btn-secondary btn-sm"
+                  onClick={() => handleRollInitiative()}
+                >
+                  🎲 Roll Initiative
+                </button>
+                {effectiveIsOwner && (
+                  <>
+                    <button
+                      data-testid="group-monster-initiative-toggle"
+                      type="button"
+                      className={`btn btn-sm ${
+                        map.combat?.groupMonsterInitiative
+                          ? "btn-primary"
+                          : "btn-outline-secondary"
+                      }`}
+                      onClick={handleToggleGroupMonsterInitiative}
+                    >
+                      Monster Init: {map.combat?.groupMonsterInitiative ? "Grouped" : "Individual"}
+                    </button>
+                    <button
+                      data-testid="chaos-mode-toggle"
+                      type="button"
+                      className={`btn btn-sm ${
+                        map.combat?.chaosMode ? "btn-warning" : "btn-outline-secondary"
+                      }`}
+                      onClick={handleToggleChaosMode}
+                    >
+                      Chaos Mode: {map.combat?.chaosMode ? "ON" : "OFF"}
+                    </button>
+                  </>
+                )}
+              </div>
+
               {/* Visual Campaign Turn Queue */}
               <div data-testid="turn-queue-list" className="turn-queue-list">
                 {turnQueueItems.map((participant, idx) => {
                   const isCurrent = participant.id === activeTurnEntityId;
                   const entityType = participant.type === "CHARACTER" ? "character" : "monster";
+                  const queueEntry = map.combat?.turnQueue?.find(
+                    (q) => q.entityId === participant.id || q.id === participant.id,
+                  );
+                  const hasAdv = Boolean(
+                    queueEntry?.hasInitiativeAdvantage || queueEntry?.initiativeMeta?.hasAdvantage,
+                  );
+                  const hasSurprise = Boolean(
+                    queueEntry?.hasSurprise ?? participant.hasSurprise,
+                  );
                   return (
                     <div
                       key={participant.id}
@@ -787,9 +915,35 @@ export function SessionRoomPage() {
                       className={`turn-queue-item ${isCurrent ? "turn-queue-item-active" : ""}`}
                     >
                       <span className="turn-queue-order">#{idx + 1}</span>
-                      <span data-testid="turn-queue-initiative" className="turn-queue-initiative">
-                        Init {participant.initiative}
+                      <span
+                        data-testid="turn-queue-initiative"
+                        className="turn-queue-initiative"
+                      >
+                        <span data-testid={`initiative-badge-${participant.id}`}>
+                          Init {participant.initiative}
+                        </span>
                       </span>
+                      {hasAdv && (
+                        <span
+                          data-testid="initiative-advantage-badge"
+                          className="turn-queue-type badge-character"
+                          title={
+                            queueEntry?.initiativeMeta?.dice
+                              ? `2d20kh1 [${queueEntry.initiativeMeta.dice.join(", ")}]`
+                              : "Thief Initiative Advantage (2d20kh1)"
+                          }
+                        >
+                          2d20kh1
+                        </span>
+                      )}
+                      {hasSurprise && (
+                        <span
+                          data-testid="surprise-badge"
+                          className="turn-queue-active-badge"
+                        >
+                          ⚡ Surprise
+                        </span>
+                      )}
                       <strong data-testid="turn-queue-name" className="turn-queue-name">
                         {participant.name}
                       </strong>
@@ -802,6 +956,55 @@ export function SessionRoomPage() {
                       <span data-testid="turn-queue-hp" className="turn-queue-hp">
                         HP {participant.hpCurrent}/{participant.hpMax}
                       </span>
+                      {effectiveIsOwner && (
+                        <span className="turn-queue-gm-controls">
+                          <button
+                            data-testid={`surprise-toggle-${participant.id}`}
+                            type="button"
+                            className={`btn btn-xs ${
+                              hasSurprise ? "btn-warning" : "btn-outline-secondary"
+                            }`}
+                            title="Toggle Surprise"
+                            onClick={() => handleToggleSurprise(participant.id, hasSurprise)}
+                          >
+                            ⚡
+                          </button>
+                          <button
+                            data-testid={`roll-initiative-${participant.id}`}
+                            type="button"
+                            className="btn btn-secondary btn-xs"
+                            title="Re-roll Initiative"
+                            onClick={() => handleRollInitiative(participant.id)}
+                          >
+                            🎲
+                          </button>
+                          <input
+                            data-testid={`initiative-input-${participant.id}`}
+                            type="number"
+                            className="initiative-override-input"
+                            value={
+                              initiativeOverrides[participant.id] ?? String(participant.initiative)
+                            }
+                            onChange={(e) =>
+                              setInitiativeOverrides((prev) => ({
+                                ...prev,
+                                [participant.id]: e.target.value,
+                              }))
+                            }
+                            style={{ width: "48px" }}
+                          />
+                          <button
+                            data-testid={`initiative-set-${participant.id}`}
+                            type="button"
+                            className="btn btn-secondary btn-xs"
+                            onClick={() =>
+                              handleSetInitiative(participant.id, participant.initiative)
+                            }
+                          >
+                            Set
+                          </button>
+                        </span>
+                      )}
                       {isCurrent && (
                         <span
                           data-testid="turn-queue-active-badge"

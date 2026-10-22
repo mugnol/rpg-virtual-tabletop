@@ -3,7 +3,7 @@
 **Document ID:** SPEC-F-08  
 **Module:** Turn-Based Combat & Campaign Turn Queue (Phase 4)  
 **Status:** Approved  
-**Related Requirements:** BR-43..BR-50, UC-39..UC-46
+**Related Requirements:** BR-43..BR-50, UC-39..UC-50
 
 ---
 
@@ -35,13 +35,34 @@ This specification defines the turn-based tactical combat engine and campaign tu
 - When combat ends:
   - `active` becomes `false`, the turn queue and active turn state are cleared, and exploration movement rules resume according to map settings.
 
-### BR-44: Initiative Calculation & Sorting
-- Initiative formula:
-  $$\text{Initiative} = \text{Roll} + \text{InitiativeModifier}$$
-  - For `CHARACTER` (`character`) participants linked to a `CharacterSheet`, the modifier is the character's Dexterity modifier or system-derived initiative score.
-  - For unlinked tokens or `MONSTER` (`monster`) participants, the modifier is the token's configured initiative bonus (default 0).
-- Participants in the `turnQueue` are sorted in descending order of total initiative.
-- Tie-breaking: higher initiative modifier breaks ties; if identical, stable identifier ordering applies.
+### BR-44: Initiative Calculation, Advantage, Surprise, Grouping & Sorting (Shadowdark Rules)
+- **Standard Initiative Formula**:
+  $$\text{Initiative} = 1d20 + \text{DEX\_Modifier}$$
+  - For `CHARACTER` (`character`) participants linked to a `CharacterSheet`, the modifier is the character's Dexterity modifier (`dex.mod`) and talents/class are inspected from the linked sheet.
+  - For unlinked tokens or `MONSTER` (`monster`) participants, the modifier is the token's configured DEX/initiative modifier (default 0).
+- **Thief Initiative Advantage Talent**:
+  - If a character has the Thief initiative talent active (e.g., `"Gain advantage on initiative rolls"` / `"Initiative Advantage"` or `hasAdvantage: true`), initiative is rolled with advantage:
+    $$\text{Initiative} = 2d20\text{kh}1 + \text{DEX\_Modifier}$$
+  - Both rolled d20 values and the kept highest die are recorded in the initiative roll metadata and broadcast to the session chat log.
+- **Surprise Turns (`hasSurprise`)**:
+  - The GM can flag any entity with `hasSurprise: true` before or during combat.
+  - Surprising entities (`hasSurprise: true`) are ordered at the top of the Turn Queue to resolve a Surprise Round (`isSurpriseRound: true`) before non-surprising entities act, and gain advantage on attacks against targets without surprise during the surprise round.
+  - Once the surprise round completes, `isSurpriseRound` clears to `false` and standard round progression continues.
+- **Grouped vs. Individual Monster Initiative (`groupMonsterInitiative`)**:
+  - **Individual Mode (default)**: Each monster rolls its own `1d20 + DEX_Modifier`.
+  - **Grouped Mode (`groupMonsterInitiative: true`)**: All active monsters share a single GM `1d20` roll added to the highest DEX/initiative modifier among active monsters.
+- **Chaos Mode (`chaosMode`)**:
+  - When `chaosMode: true` is enabled on `CombatState`, completing a full cycle of the Turn Queue (wrapping from the last participant back to index 0 for the next round) automatically re-rolls initiative for all active participants and re-sorts the Turn Queue for the new round.
+- **Queue Sorting & Tie-Breaking**:
+  - Participants in `turnQueue` are sorted by:
+    1. `hasSurprise` (`true` before `false` while in surprise round).
+    2. Descending `initiative` score.
+    3. Descending DEX/initiative modifier (`dexModifier`).
+    4. Entity priority (`CHARACTER` before `MONSTER`).
+    5. Stable entity identifier ordering.
+- **Manual Overrides & Late-Joining Combatants**:
+  - The GM or Player can trigger an initiative roll into the queue at any time (broadcasting the roll result to session chat).
+  - The GM can manually set/override any entity's initiative score or roll initiative for newly spawned monsters and late-joining characters, immediately re-sorting the Turn Queue.
 
 ### BR-45: Turn Control, Progression & Validation
 - In active combat, actions and movements are strictly validated against `activeTurnEntityId`:
@@ -141,3 +162,22 @@ This specification defines the turn-based tactical combat engine and campaign tu
 1. During an active encounter, GM or Player adds a round timer (e.g., "Torch Light" for 3 rounds, "Bless" spell for 2 rounds, or a "Dying" timer).
 2. Timer appears in the Turn Tracker with its remaining round count.
 3. As turns progress and a full cycle of the Turn Queue completes, `roundNumber` increments and each timer's `remainingRounds` decrements by 1 across all connected clients.
+
+### UC-47: Shadowdark Initiative Rolling & Thief Advantage
+1. Before or during combat, a player whose character has the Thief talent `"Gain advantage on initiative rolls"` (or GM rolling for all combatants) clicks "Roll Initiative".
+2. Server rolls `2d20kh1 + DEX_Modifier` for the Thief (recording both dice `[d1, d2]` and the kept highest value) and `1d20 + DEX_Modifier` for standard participants.
+3. Initiative scores update on the tokens, the Turn Queue re-sorts in descending initiative order, and a formatted initiative roll summary is broadcast to the session chat log.
+
+### UC-48: Surprise Turns (`hasSurprise`)
+1. Before starting combat (or during combat setup), the GM flags one or more ambushing tokens with `hasSurprise: true`.
+2. When combat starts, `isSurpriseRound` is active (`true`), placing all `hasSurprise: true` entities at the top of the Turn Queue ahead of non-surprising entities, and granting advantage on attacks against targets without surprise.
+3. Once the surprise round concludes, `isSurpriseRound` clears to `false` and normal initiative order takes effect.
+
+### UC-49: Grouped Monster Initiative & Chaos Mode
+1. GM toggles "Grouped Monster Initiative" (`groupMonsterInitiative: true`), causing all active monsters to share a single `1d20 + max(monster.dexModifier)` initiative score.
+2. GM toggles "Chaos Mode" (`chaosMode: true`) on the encounter.
+3. When the last participant in the Turn Queue finishes their turn and the round wraps to `roundNumber + 1`, the server automatically re-rolls initiative for all combatants and re-sorts the Turn Queue for the new round.
+
+### UC-50: Manual Initiative Override & Late-Joining Combatants
+1. During active combat, the GM manually sets/overrides a participant's initiative score or spawns a new monster / adds a late-joining character and rolls its initiative.
+2. The Turn Queue immediately re-sorts in descending initiative order and broadcasts the updated `FormattedCombatState` to all connected clients via WebSockets.

@@ -426,6 +426,18 @@ export interface MapToken {
   attackBonus: number;
   damageFormula: string;
   initiative: number;
+  dexModifier?: number;
+  hasSurprise?: boolean;
+  initiativeMeta?: string;
+}
+
+export interface InitiativeRollMeta {
+  dice: number[];
+  keptDie: number;
+  dexModifier: number;
+  total: number;
+  hasAdvantage: boolean;
+  formula: string;
 }
 
 export interface TurnQueueEntry {
@@ -435,6 +447,10 @@ export interface TurnQueueEntry {
   type: "CHARACTER" | "MONSTER";
   entityType: "character" | "monster";
   initiative: number;
+  dexModifier?: number;
+  hasSurprise?: boolean;
+  hasInitiativeAdvantage?: boolean;
+  initiativeMeta?: InitiativeRollMeta | null;
   ownerId: string | null;
   characterSheetId: string | null;
   hpCurrent: number;
@@ -468,6 +484,9 @@ export interface CombatState {
   turnOrder: string[];
   turnQueue?: TurnQueueEntry[];
   timers?: CombatTimer[];
+  chaosMode?: boolean;
+  groupMonsterInitiative?: boolean;
+  isSurpriseRound?: boolean;
 }
 
 export interface SessionMap {
@@ -540,8 +559,39 @@ export function deleteToken(tokenId: string): Promise<void> {
   return request("DELETE", `/tokens/${tokenId}`);
 }
 
-export function startCombat(mapId: string): Promise<{ combat: CombatState; tokens: MapToken[] }> {
-  return request("POST", `/maps/${mapId}/combat/start`);
+export function startCombat(
+  mapId: string,
+  options?: { chaosMode?: boolean; groupMonsterInitiative?: boolean },
+): Promise<{ combat: CombatState; tokens: MapToken[] }> {
+  return request("POST", `/maps/${mapId}/combat/start`, options ?? {});
+}
+
+export function rollCombatInitiative(
+  mapId: string,
+  input?: { tokenId?: string; forcedRolls?: number[] },
+): Promise<{ combat: CombatState; tokens: MapToken[] }> {
+  return request("POST", `/maps/${mapId}/combat/initiative/roll`, input ?? {});
+}
+
+export function setCombatInitiative(
+  mapId: string,
+  input: { tokenId: string; initiative: number },
+): Promise<{ combat: CombatState; tokens: MapToken[]; token: MapToken }> {
+  return request("PATCH", `/maps/${mapId}/combat/initiative`, input);
+}
+
+export function toggleTokenSurprise(
+  mapId: string,
+  input: { tokenId: string; hasSurprise?: boolean },
+): Promise<{ combat: CombatState; tokens: MapToken[]; token: MapToken }> {
+  return request("POST", `/maps/${mapId}/combat/surprise`, input);
+}
+
+export function updateCombatSettings(
+  mapId: string,
+  input: { chaosMode?: boolean; groupMonsterInitiative?: boolean },
+): Promise<{ combat: CombatState; tokens: MapToken[] }> {
+  return request("PATCH", `/maps/${mapId}/combat/settings`, input);
 }
 
 export function nextCombatTurn(mapId: string): Promise<{ combat: CombatState }> {

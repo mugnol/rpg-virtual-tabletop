@@ -247,3 +247,73 @@ Campaign turn queue synchronization, active player End Turn, GM Previous Turn, r
     # GM ends encounter
     Click TestID    combat-end-button
     Wait For Elements State    css=[data-testid="combat-tracker"]    hidden
+
+Shadowdark initiative system, surprise toggles, grouped monster initiative, Chaos Mode, and roll initiative controls
+    ${gm_ctx}=    New Context
+    Register Via UI    init-gm-${TS}@e2e.test    gm    Init GM
+    Create System Campaign Via UI    Initiative Campaign    shadowdark
+    Click TestID    invite-generate-button
+    ${code}=    Get Text    css=[data-testid="invite-code"]
+
+    # Player joins campaign and creates PC
+    ${player_ctx}=    New Context
+    Register Via UI    init-p-${TS}@e2e.test    player    Init Player
+    Go To    ${HOME}
+    Fill TestID    token-input    ${code}
+    Click TestID    join-button
+    Click TestID    sheet-create-pc-button
+    Fill TestID    sheet-name-input    Vex
+    Click TestID    sheet-save-button
+    TestID Should Be Visible    page-sheet
+
+    # GM creates session and places CHARACTER and MONSTER tokens
+    Switch Context    ${gm_ctx}
+    Click Campaign Named    Initiative Campaign
+    Click TestID    session-create-button
+    Fill TestID    session-name-input    Ambush Room
+    Click TestID    session-create-submit
+    Click    css=[data-testid="session-item"]:has-text("Ambush Room")
+    TestID Should Be Visible    map-board
+
+    Click TestID    token-add-button
+    Select Options By    css=[data-testid="token-type-select"]    value    CHARACTER
+    Select Options By    css=[data-testid="token-sheet-select"]    text    Vex
+    Click TestID    token-submit-button
+
+    Click TestID    token-add-button
+    Select Options By    css=[data-testid="token-type-select"]    value    MONSTER
+    Fill TestID    token-name-input    Ambush Spider
+    Fill TestID    token-hp-input    12
+    Fill TestID    token-ac-input    12
+    Click TestID    token-submit-button
+
+    # GM starts combat and verifies initiative badges, surprise toggle, grouped monster toggle, and Chaos Mode toggle
+    Click TestID    combat-start-button
+    TestID Should Be Visible    combat-tracker
+    TestID Should Be Visible    turn-queue-initiative
+    TestID Should Be Visible    roll-initiative-button
+    TestID Should Be Visible    chaos-mode-toggle
+    TestID Should Be Visible    group-monster-initiative-toggle
+
+    # Toggle Chaos Mode & Grouped Monster Initiative
+    Click TestID    chaos-mode-toggle
+    Click TestID    group-monster-initiative-toggle
+
+    # Click Roll Initiative button and verify chat log entry
+    Click TestID    roll-initiative-button
+    TestID Text Should Contain    chat-stream    Initiative
+
+    # Player context also sees Roll Initiative button for their character
+    Switch Context    ${player_ctx}
+    Go To    ${HOME}
+    Click Campaign Named    Initiative Campaign
+    Click    css=[data-testid="session-item"]:has-text("Ambush Room")
+    TestID Should Be Visible    combat-tracker
+    TestID Should Be Visible    roll-initiative-button
+    Click TestID    roll-initiative-button
+    TestID Text Should Contain    chat-stream    Vex
+
+    # GM ends combat
+    Switch Context    ${gm_ctx}
+    Click TestID    combat-end-button
+    Wait For Elements State    css=[data-testid="combat-tracker"]    hidden
