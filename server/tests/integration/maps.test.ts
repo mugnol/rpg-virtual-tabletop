@@ -284,4 +284,151 @@ describe("Tactical Maps & Combat Integration (BR-35..BR-50)", () => {
     expect(endRes.status).toBe(200);
     expect(endRes.body.combat.active).toBe(false);
   });
+
+  it("synchronizes campaign turn queue, activeTurnEntityId, roundNumber, player End Turn, GM Previous Turn, round timer countdowns, and turn validation", async () => {
+    seq += 1;
+    const gmAgent = await registerAgent(`tq-gm-${seq}@test.dev`, "GM", "TurnQueue GM");
+    const playerAgent = await registerAgent(`tq-p-${seq}@test.dev`, "PLAYER", "TurnQueue Player");
+    const campaignId = (await createSystemCampaign(gmAgent, `TurnQueue Camp ${seq}`, "shadowdark")).id;
+    await joinPlayer(gmAgent, playerAgent, campaignId);
+
+    const sheet = await createPc(playerAgent, campaignId, "Kaelen");
+    const sheetId = sheet.id as string;
+
+    const sessionId = (
+      await gmAgent.post(`/api/campaigns/${campaignId}/sessions`).send({ name: "TurnQueue Session" })
+    ).body.session.id;
+
+    const mapId = (
+      await gmAgent.post(`/api/sessions/${sessionId}/maps`).send({
+        name: "TurnQueue Map",
+        width: 12,
+        height: 12,
+        allowPlayerMovement: true,
+      })
+    ).body.map.id;
+
+    const playerTokenId = (
+      await gmAgent.post(`/api/maps/${mapId}/tokens`).send({
+        type: "CHARACTER",
+        characterSheetId: sheetId,
+        x: 2,
+        y: 2,
+        attackBonus: 4,
+        damageFormula: "1d8+2",
+      })
+    ).body.token.id;
+
+    const monsterTokenId = (
+      await gmAgent.post(`/api/maps/${mapId}/tokens`).send({
+        type: "MONSTER",
+        name: "Hobgoblin",
+        x: 6,
+        y: 2,
+        hpMax: 18,
+        hpCurrent: 18,
+        ac: 13,
+        attackBonus: 3,
+        damageFormula: "1d8+1",
+      })
+    ).body.token.id;
+
+    // 1. GM starts combat -> turnQueue has character and monster, roundNumber = 1, activeTurnEntityId = playerTokenId
+    const startRes = await gmAgent.post(`/api/maps/${mapId}/combat/start`).send({});
+    expect(startRes.status).toBe(200);
+    expect(startRes.body.combat.active).toBe(true);
+    expect(startRes.body.combat.roundNumber).toBe(1);
+    expect(startRes.body.combat.activeTurnEntityId).toBe(playerTokenId);
+    expect(Array.isArray(startRes.body.combat.turnQueue)).toBe(true);
+    expect(startRes.body.combat.turnQueue).toHaveLength(2);
+    expect(startRes.body.combat.turnQueue[0]).toMatchObject({
+      entityId: playerTokenId,
+      entityType: "character",
+      name: "Kaelen",
+      isActive: true,
+    });
+    expect(startRes.body.combat.turnQueue[1]).toMatchObject({
+      entityId: monsterTokenId,
+      entityType: "monster",
+      name: "Hobgoblin",
+      isActive: false,
+    });
+
+    // 2. Add personal and GM round timers (light timer & spell duration)
+    const lightTimerRes = await playerAgent.post(`/api/maps/${mapId}/combat/timers`).send({
+      name: "Torch Light",
+      category: "light",
+      scope: "personal",
+      entityId: playerTokenId,
+      durationRounds: 3,
+    });
+    expect(lightTimerRes.status).toBe(201);
+    expect(lightTimerRes.body.combat.timers).toHaveLength(1);
+    expect(lightTimerRes.body.combat.timers[0]).toMatchObject({
+      name: "Torch Light",
+      category: "light",
+      scope: "personal",
+      remainingRounds: 3,
+      expired: false,
+    });
+
+    const spellTimerRes = await gmAgent.post(`/api/maps/${mapId}/combat/timers`).send({
+      name: "Protection from Evil",
+      category: "spell",
+      scope: "gm",
+      durationRounds: 1,
+    });
+    expect(spellTimerRes.status).toBe(201);
+    expect(spellTimerRes.body.combat.timers).toHaveLength(2);
+
+    // 3. Active player moves on their own turn and then clicks End Turn
+    const validMoveRes = await playerAgent.patch(`/api/tokens/${playerTokenId}`).send({ x: 3, y: 2 });
+    expect(validMoveRes.status).toBe(200);
+
+    const endTurnRes = await playerAgent.post(`/api/maps/${mapId}/combat/end-turn`).send({});
+    expect(endTurnRes.status).toBe(200);
+    expect(endTurnRes.body.combat.turnIndex).toBe(1);
+    expect(endTurnRes.body.combat.activeTurnEntityId).toBe(monsterTokenId);
+    expect(endTurnRes.body.combat.roundNumber).toBe(1);
+
+    // 4. Turn validation: Player cannot move, attack, end turn, or revert turn on the Monster's turn
+    const outOfTurnMove = await playerAgent.patch(`/api/tokens/${playerTokenId}`).send({ x: 4, y: 2 });
+    expect(outOfTurnMove.status).toBe(403);
+    expect(outOfTurnMove.body.error.code).toBe("NOT_YOUR_TURN");
+
+    const outOfTurnAttack = await playerAgent.post(`/api/maps/${mapId}/combat/attack`).send({
+      attackerId: playerTokenId,
+      targetId: monsterTokenId,
+    });
+    expect(outOfTurnAttack.status).toBe(403);
+    expect(outOfTurnAttack.body.error.code).toBe("NOT_YOUR_TURN");
+
+    const outOfTurnEnd = await playerAgent.post(`/api/maps/${mapId}/combat/end-turn`).send({});
+    expect(outOfTurnEnd.status).toBe(403);
+    expect(outOfTurnEnd.body.error.code).toBe("NOT_YOUR_TURN");
+
+    const playerPrevAttempt = await playerAgent.post(`/api/maps/${mapId}/combat/prev`).send({});
+    expect(playerPrevAttempt.status).toBe(403);
+
+    // 5. GM advances turn from last participant -> completes full queue cycle -> roundNumber increments to 2 & timers tick down
+    const wrapNextRes = await gmAgent.post(`/api/maps/${mapId}/combat/next`).send({});
+    expect(wrapNextRes.status).toBe(200);
+    expect(wrapNextRes.body.combat.turnIndex).toBe(0);
+    expect(wrapNextRes.body.combat.roundNumber).toBe(2);
+    expect(wrapNextRes.body.combat.activeTurnEntityId).toBe(playerTokenId);
+    expect(wrapNextRes.body.combat.timers[0].remainingRounds).toBe(2);
+    expect(wrapNextRes.body.combat.timers[0].expired).toBe(false);
+    expect(wrapNextRes.body.combat.timers[1].remainingRounds).toBe(0);
+    expect(wrapNextRes.body.combat.timers[1].expired).toBe(true);
+
+    // 6. GM reverts to previous turn -> wraps back to Round 1, last participant, and restores timer countdowns
+    const prevRes = await gmAgent.post(`/api/maps/${mapId}/combat/prev`).send({});
+    expect(prevRes.status).toBe(200);
+    expect(prevRes.body.combat.turnIndex).toBe(1);
+    expect(prevRes.body.combat.roundNumber).toBe(1);
+    expect(prevRes.body.combat.activeTurnEntityId).toBe(monsterTokenId);
+    expect(prevRes.body.combat.timers[0].remainingRounds).toBe(3);
+    expect(prevRes.body.combat.timers[1].remainingRounds).toBe(1);
+    expect(prevRes.body.combat.timers[1].expired).toBe(false);
+  });
 });

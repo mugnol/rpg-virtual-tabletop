@@ -428,14 +428,46 @@ export interface MapToken {
   initiative: number;
 }
 
+export interface TurnQueueEntry {
+  id: string;
+  entityId: string;
+  name: string;
+  type: "CHARACTER" | "MONSTER";
+  entityType: "character" | "monster";
+  initiative: number;
+  ownerId: string | null;
+  characterSheetId: string | null;
+  hpCurrent: number;
+  hpMax: number;
+  ac: number;
+  speed: number;
+  isActive: boolean;
+}
+
+export interface CombatTimer {
+  id: string;
+  name: string;
+  category: "spell" | "light" | "dying" | "custom";
+  scope: "personal" | "gm";
+  entityId: string | null;
+  entityName?: string | null;
+  remainingRounds: number;
+  initialRounds: number;
+  expired: boolean;
+}
+
 export interface CombatState {
   id: string;
   mapId: string;
   active: boolean;
   round: number;
+  roundNumber?: number;
   turnIndex: number;
   activeTokenId: string | null;
+  activeTurnEntityId?: string | null;
   turnOrder: string[];
+  turnQueue?: TurnQueueEntry[];
+  timers?: CombatTimer[];
 }
 
 export interface SessionMap {
@@ -514,6 +546,34 @@ export function startCombat(mapId: string): Promise<{ combat: CombatState; token
 
 export function nextCombatTurn(mapId: string): Promise<{ combat: CombatState }> {
   return request("POST", `/maps/${mapId}/combat/next`);
+}
+
+export function endPlayerCombatTurn(mapId: string): Promise<{ combat: CombatState }> {
+  return request("POST", `/maps/${mapId}/combat/end-turn`);
+}
+
+export function previousCombatTurn(mapId: string): Promise<{ combat: CombatState }> {
+  return request("POST", `/maps/${mapId}/combat/prev`);
+}
+
+export function addCombatTimer(
+  mapId: string,
+  input: {
+    name: string;
+    category?: "spell" | "light" | "dying" | "custom";
+    scope?: "personal" | "gm";
+    entityId?: string | null;
+    durationRounds: number;
+  },
+): Promise<{ combat: CombatState }> {
+  return request("POST", `/maps/${mapId}/combat/timers`, input);
+}
+
+export function removeCombatTimer(
+  mapId: string,
+  timerId: string,
+): Promise<{ combat: CombatState }> {
+  return request("DELETE", `/maps/${mapId}/combat/timers/${timerId}`);
 }
 
 export function executeCombatAttack(

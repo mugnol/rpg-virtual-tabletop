@@ -895,6 +895,177 @@ a {
   flex-wrap: wrap;
 }
 
+.turn-status-banner {
+  padding: 0.4rem 0.75rem;
+  border-radius: 6px;
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
+.turn-status-active {
+  background: rgba(16, 185, 129, 0.2);
+  border: 1px solid #10b981;
+  color: #6ee7b7;
+}
+
+.turn-status-gm {
+  background: rgba(99, 102, 241, 0.2);
+  border: 1px solid #818cf8;
+  color: #c7d2fe;
+}
+
+.turn-status-waiting {
+  background: rgba(245, 158, 11, 0.15);
+  border: 1px solid #f59e0b;
+  color: #fde68a;
+}
+
+.turn-queue-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  padding: 0.5rem;
+  background: rgba(15, 23, 42, 0.6);
+  border-radius: 6px;
+  border: 1px solid rgba(129, 140, 248, 0.3);
+}
+
+.turn-queue-item {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  padding: 0.4rem 0.65rem;
+  background: rgba(30, 41, 59, 0.9);
+  border: 1px solid #475569;
+  border-radius: 6px;
+  font-size: 0.85rem;
+}
+
+.turn-queue-item-active {
+  border-color: #f59e0b;
+  background: rgba(120, 53, 15, 0.45);
+  box-shadow: 0 0 8px rgba(245, 158, 11, 0.4);
+}
+
+.turn-queue-order {
+  color: #94a3b8;
+  font-family: monospace;
+  font-size: 0.75rem;
+}
+
+.turn-queue-initiative {
+  background: #312e81;
+  color: #c7d2fe;
+  padding: 0.1rem 0.35rem;
+  border-radius: 4px;
+  font-family: monospace;
+  font-size: 0.75rem;
+}
+
+.turn-queue-type {
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  padding: 0.1rem 0.4rem;
+  border-radius: 999px;
+  font-weight: 700;
+}
+
+.badge-character {
+  background: rgba(99, 102, 241, 0.3);
+  color: #a5b4fc;
+  border: 1px solid #6366f1;
+}
+
+.badge-monster {
+  background: rgba(239, 68, 68, 0.3);
+  color: #fca5a5;
+  border: 1px solid #ef4444;
+}
+
+.turn-queue-hp {
+  font-family: monospace;
+  color: #10b981;
+  font-size: 0.8rem;
+}
+
+.turn-queue-active-badge {
+  background: #f59e0b;
+  color: #181411;
+  font-size: 0.7rem;
+  font-weight: 700;
+  padding: 0.1rem 0.4rem;
+  border-radius: 4px;
+  text-transform: uppercase;
+}
+
+.combat-timers {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  padding-top: 0.5rem;
+  border-top: 1px solid rgba(129, 140, 248, 0.3);
+}
+
+.combat-timers-header {
+  font-size: 0.85rem;
+  color: #c7d2fe;
+}
+
+.combat-timer-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+
+.combat-timer-item {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.3rem 0.6rem;
+  background: rgba(15, 23, 42, 0.75);
+  border: 1px solid #6366f1;
+  border-radius: 6px;
+  font-size: 0.8rem;
+}
+
+.timer-item-expired {
+  border-color: #ef4444;
+  opacity: 0.75;
+}
+
+.combat-timer-meta {
+  color: #94a3b8;
+  font-size: 0.75rem;
+}
+
+.combat-timer-rounds {
+  font-family: monospace;
+  font-weight: 700;
+  color: #fbbf24;
+}
+
+.combat-timer-form {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  align-items: center;
+}
+
+.combat-timer-form input,
+.combat-timer-form select {
+  padding: 0.3rem 0.5rem;
+  border-radius: 4px;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--text);
+  font-size: 0.8rem;
+}
+
+.map-cell.cell-in-range {
+  background-color: rgba(16, 185, 129, 0.18);
+  border-color: rgba(16, 185, 129, 0.55);
+}
+
 /* Modal form */
 .modal-overlay {
   position: fixed;

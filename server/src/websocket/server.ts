@@ -6,12 +6,16 @@ import { prisma } from "../db.js";
 import { verifySessionToken } from "../lib/tokens.js";
 import { rollDice } from "../modules/dice/dice.js";
 import {
+  addCombatTimer,
   deleteToken,
   endCombat,
   executeCombatAttack,
+  formatMapWithCombat,
   moveOrUpdateToken,
   nextCombatTurn,
   placeToken,
+  previousCombatTurn,
+  removeCombatTimer,
   startCombat,
   updateMap,
 } from "../modules/maps/service.js";
@@ -183,6 +187,7 @@ export function attachWebSocketServer(server: http.Server): WebSocketServer {
                       round: 1,
                       turnIndex: 0,
                       turnOrder: "[]",
+                      timers: "[]",
                     },
                   },
                 },
@@ -215,15 +220,7 @@ export function attachWebSocketServer(server: http.Server): WebSocketServer {
                   deleted: m.deleted,
                   createdAt: m.createdAt,
                 })),
-                maps: maps.map((m) => ({
-                  ...m,
-                  combat: m.combat
-                    ? {
-                        ...m.combat,
-                        turnOrder: JSON.parse(m.combat.turnOrder) as string[],
-                      }
-                    : null,
-                })),
+                maps: maps.map(formatMapWithCombat),
               }),
             );
 
@@ -412,15 +409,7 @@ export function attachWebSocketServer(server: http.Server): WebSocketServer {
                 const updated = await updateMap(user.id, mapId, data);
                 broadcastToRoom(sessionId, {
                   type: "map_updated",
-                  map: {
-                    ...updated,
-                    combat: updated.combat
-                      ? {
-                          ...updated.combat,
-                          turnOrder: JSON.parse(updated.combat.turnOrder) as string[],
-                        }
-                      : null,
-                  },
+                  map: updated,
                 });
                 break;
               }
@@ -482,11 +471,77 @@ export function attachWebSocketServer(server: http.Server): WebSocketServer {
                 break;
               }
 
-              case "next_turn": {
+              case "next_turn":
+              case "end_turn": {
                 const mapId = typeof payload.mapId === "string" ? payload.mapId : "";
                 const res = await nextCombatTurn(user.id, mapId);
                 broadcastToRoom(sessionId, {
                   type: "turn_changed",
+                  mapId,
+                  combat: res,
+                });
+                break;
+              }
+
+              case "prev_turn":
+              case "previous_turn": {
+                const mapId = typeof payload.mapId === "string" ? payload.mapId : "";
+                const res = await previousCombatTurn(user.id, mapId);
+                broadcastToRoom(sessionId, {
+                  type: "turn_changed",
+                  mapId,
+                  combat: res,
+                });
+                break;
+              }
+
+              case "add_combat_timer": {
+                const mapId = typeof payload.mapId === "string" ? payload.mapId : "";
+                const timerInput = (payload.timer ?? {}) as Record<string, unknown>;
+                const name =
+                  typeof timerInput.name === "string" && timerInput.name.trim()
+                    ? timerInput.name.trim()
+                    : "Timer";
+                const category = (
+                  ["spell", "light", "dying", "custom"].includes(timerInput.category as string)
+                    ? timerInput.category
+                    : "custom"
+                ) as "spell" | "light" | "dying" | "custom";
+                const scope = (
+                  ["personal", "gm"].includes(timerInput.scope as string)
+                    ? timerInput.scope
+                    : timerInput.entityId
+                      ? "personal"
+                      : "gm"
+                ) as "personal" | "gm";
+                const entityId =
+                  typeof timerInput.entityId === "string" ? timerInput.entityId : null;
+                const durationRounds =
+                  typeof timerInput.durationRounds === "number"
+                    ? Math.max(1, Math.floor(timerInput.durationRounds))
+                    : 3;
+
+                const res = await addCombatTimer(user.id, mapId, {
+                  name,
+                  category,
+                  scope,
+                  entityId,
+                  durationRounds,
+                });
+                broadcastToRoom(sessionId, {
+                  type: "combat_timer_updated",
+                  mapId,
+                  combat: res,
+                });
+                break;
+              }
+
+              case "remove_combat_timer": {
+                const mapId = typeof payload.mapId === "string" ? payload.mapId : "";
+                const timerId = typeof payload.timerId === "string" ? payload.timerId : "";
+                const res = await removeCombatTimer(user.id, mapId, timerId);
+                broadcastToRoom(sessionId, {
+                  type: "combat_timer_updated",
                   mapId,
                   combat: res,
                 });
@@ -505,6 +560,7 @@ export function attachWebSocketServer(server: http.Server): WebSocketServer {
                   mapId,
                   attack: res.attack,
                   targetToken: res.targetToken,
+                  combat: res.combat,
                 });
 
                 // Broadcast combat log to chat feed

@@ -3,12 +3,14 @@ import { asyncHandler, parseBody } from "../../lib/http.js";
 import { requireAuth } from "../../middleware/auth.js";
 import {
   combatAttackSchema,
+  combatTimerCreateSchema,
   mapCreateSchema,
   mapUpdateSchema,
   tokenCreateSchema,
   tokenUpdateSchema,
 } from "./schemas.js";
 import {
+  addCombatTimer,
   createSessionMap,
   deleteToken,
   endCombat,
@@ -18,6 +20,8 @@ import {
   moveOrUpdateToken,
   nextCombatTurn,
   placeToken,
+  previousCombatTurn,
+  removeCombatTimer,
   startCombat,
   updateMap,
 } from "./service.js";
@@ -86,6 +90,47 @@ mapsRouter.post(
   "/:id/combat/next",
   asyncHandler(async (req, res) => {
     const combat = await nextCombatTurn(req.user!.id, req.params.id);
+    res.json({ combat });
+  }),
+);
+
+mapsRouter.post(
+  "/:id/combat/end-turn",
+  asyncHandler(async (req, res) => {
+    const combat = await nextCombatTurn(req.user!.id, req.params.id);
+    res.json({ combat });
+  }),
+);
+
+mapsRouter.post(
+  "/:id/combat/prev",
+  asyncHandler(async (req, res) => {
+    const combat = await previousCombatTurn(req.user!.id, req.params.id);
+    res.json({ combat });
+  }),
+);
+
+mapsRouter.post(
+  "/:id/combat/previous",
+  asyncHandler(async (req, res) => {
+    const combat = await previousCombatTurn(req.user!.id, req.params.id);
+    res.json({ combat });
+  }),
+);
+
+mapsRouter.post(
+  "/:id/combat/timers",
+  asyncHandler(async (req, res) => {
+    const input = parseBody(combatTimerCreateSchema, req.body);
+    const combat = await addCombatTimer(req.user!.id, req.params.id, input);
+    res.status(201).json({ combat });
+  }),
+);
+
+mapsRouter.delete(
+  "/:id/combat/timers/:timerId",
+  asyncHandler(async (req, res) => {
+    const combat = await removeCombatTimer(req.user!.id, req.params.id, req.params.timerId);
     res.json({ combat });
   }),
 );

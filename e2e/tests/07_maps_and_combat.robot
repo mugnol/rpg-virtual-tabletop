@@ -147,3 +147,103 @@ Turn-based combat initiative, turn cycling, attacks and HP deduction
     # GM ends combat
     Click TestID    combat-end-button
     Wait For Elements State    css=[data-testid="combat-tracker"]    hidden
+
+Campaign turn queue synchronization, active player End Turn, GM Previous Turn, round timer countdowns, and turn validation
+    ${gm_ctx}=    New Context
+    Register Via UI    tq-gm-${TS}@e2e.test    gm    Queue GM
+    Create System Campaign Via UI    Turn Queue Campaign    shadowdark
+    Click TestID    invite-generate-button
+    ${code}=    Get Text    css=[data-testid="invite-code"]
+
+    # Player joins campaign and creates PC
+    ${player_ctx}=    New Context
+    Register Via UI    tq-p-${TS}@e2e.test    player    Queue Player
+    Go To    ${HOME}
+    Fill TestID    token-input    ${code}
+    Click TestID    join-button
+    Click TestID    sheet-create-pc-button
+    Fill TestID    sheet-name-input    Elara
+    Click TestID    sheet-save-button
+    TestID Should Be Visible    page-sheet
+
+    # GM creates session and places CHARACTER and MONSTER tokens
+    Switch Context    ${gm_ctx}
+    Click Campaign Named    Turn Queue Campaign
+    Click TestID    session-create-button
+    Fill TestID    session-name-input    Crypt Encounter
+    Click TestID    session-create-submit
+    Click    css=[data-testid="session-item"]:has-text("Crypt Encounter")
+    TestID Should Be Visible    map-board
+
+    Click TestID    token-add-button
+    Select Options By    css=[data-testid="token-type-select"]    value    CHARACTER
+    Select Options By    css=[data-testid="token-sheet-select"]    text    Elara
+    Click TestID    token-submit-button
+
+    Click TestID    token-add-button
+    Select Options By    css=[data-testid="token-type-select"]    value    MONSTER
+    Fill TestID    token-name-input    Shadow Stalker
+    Fill TestID    token-hp-input    15
+    Fill TestID    token-ac-input    12
+    Fill TestID    token-attack-bonus-input    3
+    Fill TestID    token-damage-input    1d6+1
+    Click TestID    token-submit-button
+
+    # Player opens the same session room simultaneously
+    Switch Context    ${player_ctx}
+    Go To    ${HOME}
+    Click Campaign Named    Turn Queue Campaign
+    Click    css=[data-testid="session-item"]:has-text("Crypt Encounter")
+    TestID Should Be Visible    map-board
+
+    # GM starts encounter / turn tracking
+    Switch Context    ${gm_ctx}
+    Click TestID    combat-start-button
+    TestID Should Be Visible    combat-tracker
+    TestID Should Be Visible    turn-queue-list
+    TestID Text Should Be    combat-round-number    1
+    TestID Text Should Contain    active-turn-indicator    Elara
+    Get Element    css=[data-testid="turn-queue-item"][data-entity-type="character"]:has-text("Elara")
+    Get Element    css=[data-testid="turn-queue-item"][data-entity-type="monster"]:has-text("Shadow Stalker")
+
+    # GM adds a round timer (Torch Light, 3 rounds)
+    Fill TestID    timer-name-input    Torch Light
+    Select Options By    css=[data-testid="timer-category-select"]    value    light
+    Fill TestID    timer-rounds-input    3
+    Click TestID    timer-add-button
+    Get Element    css=[data-testid="combat-timer-item"]:has-text("Torch Light")
+    TestID Text Should Contain    combat-timers    3
+
+    # Verify Player sees synchronized Turn Tracker, Turn Queue, Round 1, and End Turn button on their character's turn
+    Switch Context    ${player_ctx}
+    TestID Should Be Visible    combat-tracker
+    TestID Should Be Visible    turn-queue-list
+    TestID Text Should Be    combat-round-number    1
+    TestID Text Should Contain    active-turn-indicator    Elara
+    TestID Should Be Visible    combat-end-turn-button
+
+    # Active player clicks End Turn to advance queue to Shadow Stalker
+    Click TestID    combat-end-turn-button
+    TestID Text Should Contain    active-turn-indicator    Shadow Stalker
+
+    # Turn validation: Player attempts to attack out of turn and is rejected
+    Click TestID    combat-attack-button
+    Form Error Should Contain    It is not your turn
+
+    # GM sees Shadow Stalker's turn and clicks Next Turn to complete full cycle -> Round 2 & timer ticks to 2
+    Switch Context    ${gm_ctx}
+    TestID Text Should Contain    active-turn-indicator    Shadow Stalker
+    Click TestID    combat-next-button
+    TestID Text Should Be    combat-round-number    2
+    TestID Text Should Contain    active-turn-indicator    Elara
+    Get Element    css=[data-testid="combat-timer-rounds"]:has-text("2")
+
+    # GM clicks Previous Turn to revert back to Round 1 and Shadow Stalker's turn (timer restored to 3)
+    Click TestID    combat-prev-button
+    TestID Text Should Be    combat-round-number    1
+    TestID Text Should Contain    active-turn-indicator    Shadow Stalker
+    Get Element    css=[data-testid="combat-timer-rounds"]:has-text("3")
+
+    # GM ends encounter
+    Click TestID    combat-end-button
+    Wait For Elements State    css=[data-testid="combat-tracker"]    hidden

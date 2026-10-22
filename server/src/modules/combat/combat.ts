@@ -7,6 +7,34 @@ export interface Combatant {
   name?: string;
 }
 
+export interface TurnQueueEntry {
+  id: string;
+  entityId: string;
+  name: string;
+  type: "CHARACTER" | "MONSTER";
+  entityType: "character" | "monster";
+  initiative: number;
+  ownerId: string | null;
+  characterSheetId: string | null;
+  hpCurrent: number;
+  hpMax: number;
+  ac: number;
+  speed: number;
+  isActive: boolean;
+}
+
+export interface CombatTimer {
+  id: string;
+  name: string;
+  category: "spell" | "light" | "dying" | "custom";
+  scope: "personal" | "gm";
+  entityId: string | null;
+  entityName?: string | null;
+  remainingRounds: number;
+  initialRounds: number;
+  expired: boolean;
+}
+
 export interface CombatAttackParams {
   attackerName: string;
   attackBonus: number;
@@ -51,21 +79,154 @@ export function sortInitiative(combatants: Combatant[]): string[] {
   return sorted.map((c) => c.id);
 }
 
+export function buildTurnQueue(
+  turnOrder: string[],
+  tokens: Array<{
+    id: string;
+    name: string;
+    type: string;
+    initiative: number;
+    ownerId?: string | null;
+    characterSheetId?: string | null;
+    hpCurrent: number;
+    hpMax: number;
+    ac: number;
+    speed?: number;
+  }>,
+  activeTokenId: string | null,
+): TurnQueueEntry[] {
+  const tokenMap = new Map(tokens.map((t) => [t.id, t]));
+  const queue: TurnQueueEntry[] = [];
+  for (const id of turnOrder) {
+    const token = tokenMap.get(id);
+    if (!token) continue;
+    const upperType = token.type.toUpperCase();
+    if (upperType !== "CHARACTER" && upperType !== "MONSTER") continue;
+    queue.push({
+      id: token.id,
+      entityId: token.id,
+      name: token.name,
+      type: upperType,
+      entityType: upperType === "CHARACTER" ? "character" : "monster",
+      initiative: token.initiative,
+      ownerId: token.ownerId ?? null,
+      characterSheetId: token.characterSheetId ?? null,
+      hpCurrent: token.hpCurrent,
+      hpMax: token.hpMax,
+      ac: token.ac,
+      speed: token.speed ?? 6,
+      isActive: token.id === activeTokenId,
+    });
+  }
+  return queue;
+}
+
 export function advanceTurn(
   turnOrder: string[],
   currentTurnIndex: number,
   currentRound: number,
-): { nextTurnIndex: number; nextRound: number; activeTokenId: string } {
+): {
+  nextTurnIndex: number;
+  nextRound: number;
+  roundNumber: number;
+  activeTokenId: string;
+  activeTurnEntityId: string;
+  wrappedRound: boolean;
+} {
   if (turnOrder.length === 0) {
-    return { nextTurnIndex: 0, nextRound: currentRound, activeTokenId: "" };
+    return {
+      nextTurnIndex: 0,
+      nextRound: currentRound,
+      roundNumber: currentRound,
+      activeTokenId: "",
+      activeTurnEntityId: "",
+      wrappedRound: false,
+    };
   }
   const nextTurnIndex = (currentTurnIndex + 1) % turnOrder.length;
-  const nextRound = nextTurnIndex === 0 ? currentRound + 1 : currentRound;
+  const wrappedRound = nextTurnIndex === 0;
+  const nextRound = wrappedRound ? currentRound + 1 : currentRound;
+  const activeTokenId = turnOrder[nextTurnIndex] ?? "";
   return {
     nextTurnIndex,
     nextRound,
-    activeTokenId: turnOrder[nextTurnIndex] ?? "",
+    roundNumber: nextRound,
+    activeTokenId,
+    activeTurnEntityId: activeTokenId,
+    wrappedRound,
   };
+}
+
+export function revertTurn(
+  turnOrder: string[],
+  currentTurnIndex: number,
+  currentRound: number,
+): {
+  prevTurnIndex: number;
+  prevRound: number;
+  roundNumber: number;
+  activeTokenId: string;
+  activeTurnEntityId: string;
+  wrappedBack: boolean;
+} {
+  if (turnOrder.length === 0) {
+    return {
+      prevTurnIndex: 0,
+      prevRound: currentRound,
+      roundNumber: currentRound,
+      activeTokenId: "",
+      activeTurnEntityId: "",
+      wrappedBack: false,
+    };
+  }
+  if (currentTurnIndex > 0) {
+    const prevTurnIndex = currentTurnIndex - 1;
+    const activeTokenId = turnOrder[prevTurnIndex] ?? "";
+    return {
+      prevTurnIndex,
+      prevRound: currentRound,
+      roundNumber: currentRound,
+      activeTokenId,
+      activeTurnEntityId: activeTokenId,
+      wrappedBack: false,
+    };
+  }
+  if (currentRound > 1) {
+    const prevTurnIndex = turnOrder.length - 1;
+    const prevRound = currentRound - 1;
+    const activeTokenId = turnOrder[prevTurnIndex] ?? "";
+    return {
+      prevTurnIndex,
+      prevRound,
+      roundNumber: prevRound,
+      activeTokenId,
+      activeTurnEntityId: activeTokenId,
+      wrappedBack: true,
+    };
+  }
+  const activeTokenId = turnOrder[0] ?? "";
+  return {
+    prevTurnIndex: 0,
+    prevRound: 1,
+    roundNumber: 1,
+    activeTokenId,
+    activeTurnEntityId: activeTokenId,
+    wrappedBack: false,
+  };
+}
+
+export function tickCombatTimers(timers: CombatTimer[], delta = -1): CombatTimer[] {
+  return timers.map((timer) => {
+    const nextRemaining =
+      delta < 0
+        ? Math.max(0, timer.remainingRounds + delta)
+        : Math.min(timer.initialRounds, timer.remainingRounds + delta);
+    return {
+      ...timer,
+      remainingRounds: nextRemaining,
+      expired: nextRemaining === 0,
+    };
+  });
 }
 
 export function doubleDiceCount(formula: string): string {

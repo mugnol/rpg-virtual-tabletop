@@ -60,8 +60,54 @@ model CombatState {
   turnIndex     Int        @default(0)
   activeTokenId String?
   turnOrder     String     @default("[]") // JSON serialized Array<string> of MapToken IDs
+  timers        String     @default("[]") // JSON serialized Array<CombatTimer>
   createdAt     DateTime   @default(now())
   updatedAt     DateTime   @updatedAt
+}
+```
+
+### 1.2 Turn Queue & Timer DTOs
+```ts
+export interface TurnQueueEntry {
+  id: string;
+  entityId: string;
+  name: string;
+  type: "CHARACTER" | "MONSTER";
+  entityType: "character" | "monster";
+  initiative: number;
+  ownerId: string | null;
+  characterSheetId: string | null;
+  hpCurrent: number;
+  hpMax: number;
+  ac: number;
+  speed: number;
+  isActive: boolean;
+}
+
+export interface CombatTimer {
+  id: string;
+  name: string;
+  category: "spell" | "light" | "dying" | "custom";
+  scope: "personal" | "gm";
+  entityId: string | null;
+  entityName?: string | null;
+  remainingRounds: number;
+  initialRounds: number;
+  expired: boolean;
+}
+
+export interface FormattedCombatState {
+  id: string;
+  mapId: string;
+  active: boolean;
+  round: number;
+  roundNumber: number;
+  turnIndex: number;
+  activeTokenId: string | null;
+  activeTurnEntityId: string | null;
+  turnOrder: string[];
+  turnQueue: TurnQueueEntry[];
+  timers: CombatTimer[];
 }
 ```
 
@@ -71,7 +117,7 @@ model CombatState {
 
 ### 2.1 Map Management
 - `GET /api/sessions/:sessionId/maps`
-  - Returns array of maps for the session.
+  - Returns array of maps for the session with formatted `combat` state.
 - `POST /api/sessions/:sessionId/maps` (GM only)
   - Creates a new tactical map.
 - `GET /api/maps/:mapId`
@@ -83,19 +129,27 @@ model CombatState {
 - `POST /api/maps/:mapId/tokens` (GM only)
   - Places a new token (`CHARACTER`, `MONSTER`, or `ITEM`).
 - `PATCH /api/tokens/:tokenId`
-  - Updates token stats or position `(x, y)` subject to movement rules.
+  - Updates token stats or position `(x, y)` subject to movement and active turn rules.
 - `DELETE /api/tokens/:tokenId` (GM only)
-  - Removes a token from the map.
+  - Removes a token from the map (and removes from active `turnQueue` if present).
 
-### 2.3 Combat Controls
+### 2.3 Combat & Turn Queue Controls
 - `POST /api/maps/:mapId/combat/start` (GM only)
-  - Rolls initiative, initializes turn order and round 1, activates combat.
+  - Rolls initiative for all `CHARACTER` (`character`) and `MONSTER` (`monster`) participants, initializes `turnOrder` / `turnQueue`, sets `round` / `roundNumber` to 1, `activeTokenId` / `activeTurnEntityId` to the first participant, and activates combat.
 - `POST /api/maps/:mapId/combat/next` (GM or active player)
-  - Advances turn to next combatant (increments round on wrap).
+  - Advances turn to next participant in queue. On full queue cycle wrap (`turnIndex` wraps to 0), increments `roundNumber` and decrements all active `timers` by 1 round.
+- `POST /api/maps/:mapId/combat/end-turn` (Active player or GM)
+  - Allows the active player to end their own character's turn and advance the queue to the next participant.
+- `POST /api/maps/:mapId/combat/prev` (GM only)
+  - Reverts turn to the previous participant in the queue. If `turnIndex` was 0 and `roundNumber > 1`, wraps backward to `turnQueue.length - 1`, decrements `roundNumber` by 1 (min 1), and restores timer countdowns by 1 round.
+- `POST /api/maps/:mapId/combat/timers` (GM or Campaign Participant)
+  - Adds a personal or GM round timer (`spell`, `light`, `dying`, `custom`) to the combat encounter.
+- `DELETE /api/maps/:mapId/combat/timers/:timerId` (GM or Campaign Participant)
+  - Removes a round timer from the combat encounter.
 - `POST /api/maps/:mapId/combat/attack` (GM or active player)
   - Executes attack from active token to target token; returns combat result.
 - `POST /api/maps/:mapId/combat/end` (GM only)
-  - Terminates combat and clears turn state.
+  - Terminates combat and clears turn queue and timers.
 
 ---
 
@@ -104,32 +158,52 @@ model CombatState {
 Clients connected to `/ws/sessions/:id` exchange map and combat messages:
 
 ### 3.1 Client -> Server Messages
-- `update_map`: `{ type: "update_map", mapId, theme?, width?, height?, allowPlayerMovement? }`
-- `place_token`: `{ type: "place_token", mapId, tokenData }`
+- `update_map`: `{ type: "update_map", mapId, data: { theme?, width?, height?, allowPlayerMovement? } }`
+- `place_token`: `{ type: "place_token", mapId, token }`
 - `move_token`: `{ type: "move_token", tokenId, x, y }`
 - `delete_token`: `{ type: "delete_token", tokenId }`
 - `start_combat`: `{ type: "start_combat", mapId }`
 - `next_turn`: `{ type: "next_turn", mapId }`
+- `end_turn`: `{ type: "end_turn", mapId }`
+- `prev_turn`: `{ type: "prev_turn", mapId }`
+- `add_combat_timer`: `{ type: "add_combat_timer", mapId, timer: { name, durationRounds, category?, scope?, entityId? } }`
+- `remove_combat_timer`: `{ type: "remove_combat_timer", mapId, timerId }`
 - `combat_attack`: `{ type: "combat_attack", mapId, attackerId, targetId }`
 - `end_combat`: `{ type: "end_combat", mapId }`
 
 ### 3.2 Server -> Client Broadcasts
 - `session_state`: Extended to include `maps: Array<SessionMapWithTokensAndCombat>`.
 - `map_updated`: `{ type: "map_updated", map: SessionMap }`
-- `token_placed`: `{ type: "token_placed", token: MapToken }`
+- `token_placed`: `{ type: "token_placed", mapId, token: MapToken }`
 - `token_moved`: `{ type: "token_moved", token: MapToken }`
 - `token_updated`: `{ type: "token_updated", token: MapToken }`
 - `token_deleted`: `{ type: "token_deleted", tokenId: string }`
-- `combat_started`: `{ type: "combat_started", combat: CombatState, tokens: MapToken[] }`
-- `turn_changed`: `{ type: "turn_changed", combat: CombatState }`
-- `combat_attack`: `{ type: "combat_attack", attack: CombatAttackResult, targetToken: MapToken }`
-- `combat_ended`: `{ type: "combat_ended", combat: CombatState }`
+- `combat_started`: `{ type: "combat_started", mapId, combat: FormattedCombatState, tokens: MapToken[] }`
+- `turn_changed`: `{ type: "turn_changed", mapId, combat: FormattedCombatState }`
+- `combat_timer_updated`: `{ type: "combat_timer_updated", mapId, combat: FormattedCombatState }`
+- `combat_attack`: `{ type: "combat_attack", mapId, attack: CombatAttackResult, targetToken: MapToken, combat?: FormattedCombatState }`
+- `combat_ended`: `{ type: "combat_ended", mapId, combat: FormattedCombatState }`
 
 ---
 
-## 4. Combat Resolution Engine
+## 4. Combat Resolution & Turn Queue Engine
 
-### 4.1 Attack Evaluation Algorithm
+### 4.1 Turn Queue Progression & Timer Ticking
+1. **`advanceTurn(turnOrder, currentTurnIndex, currentRound)`**:
+   - Computes `nextTurnIndex = (currentTurnIndex + 1) % turnOrder.length`.
+   - `wrappedRound = nextTurnIndex === 0`.
+   - `nextRound = wrappedRound ? currentRound + 1 : currentRound`.
+   - Returns `{ nextTurnIndex, nextRound, roundNumber: nextRound, activeTokenId, activeTurnEntityId: activeTokenId, wrappedRound }`.
+2. **`revertTurn(turnOrder, currentTurnIndex, currentRound)`**:
+   - If `currentTurnIndex > 0`: `prevTurnIndex = currentTurnIndex - 1`, `prevRound = currentRound`, `wrappedBack = false`.
+   - If `currentTurnIndex === 0` and `currentRound > 1`: `prevTurnIndex = turnOrder.length - 1`, `prevRound = currentRound - 1`, `wrappedBack = true`.
+   - If `currentTurnIndex === 0` and `currentRound <= 1`: `prevTurnIndex = 0`, `prevRound = 1`, `wrappedBack = false`.
+   - Returns `{ prevTurnIndex, prevRound, roundNumber: prevRound, activeTokenId, activeTurnEntityId: activeTokenId, wrappedBack }`.
+3. **`tickCombatTimers(timers, delta)`**:
+   - When `delta = -1` (round wrap forward): decrements each timer's `remainingRounds = Math.max(0, timer.remainingRounds - 1)` and sets `expired = remainingRounds === 0`.
+   - When `delta = +1` (round wrap backward): increments each timer's `remainingRounds = Math.min(timer.initialRounds, timer.remainingRounds + 1)` and sets `expired = remainingRounds === 0`.
+
+### 4.2 Attack Evaluation Algorithm
 1. **D20 Roll:** Generate integer $r \in [1, 20]$.
 2. **Critical Detection:**
    - If $r = 20 \implies \text{isCritical} = \text{true}, \text{hit} = \text{true}$.
@@ -170,10 +244,31 @@ Clients connected to `/ws/sessions/:id` exchange map and combat messages:
 | Allow Movement Toggle (GM) | `allow-movement-toggle` | Checkbox / switch for player movement |
 | Map Theme Select (GM) | `map-theme-select` | Selector for map theme |
 | Combat Tracker Panel | `combat-tracker` | Turn order and combat controls |
+| Round Number Badge | `combat-round-number` | Current `roundNumber` display |
+| Turn Status Banner | `turn-status-banner` | Indicates whose turn is active & permission status |
+| Turn Queue List | `turn-queue-list` | Ordered list of `character` and `monster` participants |
+| Turn Queue Item | `turn-queue-item` | Participant card in the turn queue |
+| Turn Queue Participant Name | `turn-queue-name` | Participant name in the turn queue |
+| Turn Queue Participant Type | `turn-queue-type` | Participant type badge (`character` or `monster`) |
+| Turn Queue Initiative | `turn-queue-initiative` | Participant initiative score |
+| Turn Queue HP | `turn-queue-hp` | Participant HP in the turn queue |
+| Turn Queue Active Badge | `turn-queue-active-badge` | Active turn badge on current participant |
 | Start Combat Button (GM) | `combat-start-button` | Initiates turn-based combat |
-| Next Turn Button | `combat-next-button` | Advances turn |
+| Previous Turn Button (GM) | `combat-prev-button` | Reverts to previous turn |
+| Next Turn Button (GM) | `combat-next-button` | Advances to next turn |
+| End Turn Button (Player) | `combat-end-turn-button` | Active player ends their turn |
 | End Combat Button (GM) | `combat-end-button` | Concludes combat |
 | Active Turn Indicator | `active-turn-indicator` | Highlights current combatant |
 | Target Selector | `combat-target-select` | Selects target token to attack |
 | Attack Action Button | `combat-attack-button` | Executes attack against selected target |
+| Combat Timers Section | `combat-timers` | Personal & GM round timer countdowns |
+| Combat Timer Item | `combat-timer-item` | Individual round timer row |
+| Combat Timer Name | `combat-timer-name` | Name of the round timer |
+| Combat Timer Rounds | `combat-timer-rounds` | Remaining rounds or `Expired` status |
+| Timer Name Input | `timer-name-input` | Input for new timer name |
+| Timer Category Select | `timer-category-select` | Select for `spell`, `light`, `dying`, `custom` |
+| Timer Scope Select | `timer-scope-select` | Select for `personal`, `gm` |
+| Timer Rounds Input | `timer-rounds-input` | Duration in rounds input |
+| Timer Add Button | `timer-add-button` | Adds round timer |
+| Timer Delete Button | `timer-delete-button` | Removes round timer |
 | Combat Log Message | `combat-log-message` | Formatted combat summary in chat feed |

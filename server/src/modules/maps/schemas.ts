@@ -17,7 +17,11 @@ export const mapUpdateSchema = z.object({
 });
 
 export const tokenCreateSchema = z.object({
-  type: z.enum(["CHARACTER", "MONSTER", "ITEM"]).default("CHARACTER"),
+  type: z
+    .string()
+    .transform((v) => v.toUpperCase())
+    .pipe(z.enum(["CHARACTER", "MONSTER", "ITEM"]))
+    .default("CHARACTER"),
   name: z.string().trim().min(1).max(100).optional(),
   characterSheetId: z.string().optional(),
   ownerId: z.string().optional(),
@@ -53,8 +57,17 @@ export const combatAttackSchema = z.object({
   forcedD20: z.number().int().min(1).max(20).optional(),
 });
 
+export const combatTimerCreateSchema = z.object({
+  name: z.string().trim().min(1).max(100),
+  category: z.enum(["spell", "light", "dying", "custom"]).default("custom"),
+  scope: z.enum(["personal", "gm"]).default("gm"),
+  entityId: z.string().nullable().optional(),
+  durationRounds: z.number().int().min(1).max(100).default(3),
+});
+
 export type MapCreateInput = z.infer<typeof mapCreateSchema>;
 export type MapUpdateInput = z.infer<typeof mapUpdateSchema>;
 export type TokenCreateInput = z.infer<typeof tokenCreateSchema>;
 export type TokenUpdateInput = z.infer<typeof tokenUpdateSchema>;
 export type CombatAttackInput = z.infer<typeof combatAttackSchema>;
+export type CombatTimerCreateInput = z.infer<typeof combatTimerCreateSchema>;

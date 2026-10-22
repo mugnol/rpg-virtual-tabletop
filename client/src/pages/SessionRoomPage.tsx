@@ -42,6 +42,12 @@ export function SessionRoomPage() {
   const [selectedTokenId, setSelectedTokenId] = useState<string | null>(null);
   const [combatTargetId, setCombatTargetId] = useState<string>("");
 
+  // Round timer form state
+  const [timerName, setTimerName] = useState<string>("");
+  const [timerCategory, setTimerCategory] = useState<"spell" | "light" | "dying" | "custom">("light");
+  const [timerScope, setTimerScope] = useState<"personal" | "gm">("personal");
+  const [timerRounds, setTimerRounds] = useState<string>("3");
+
   // Token placement modal state
   const [isAddTokenOpen, setIsAddTokenOpen] = useState(false);
   const [tokenType, setTokenType] = useState<"CHARACTER" | "MONSTER" | "ITEM">("CHARACTER");
@@ -228,6 +234,7 @@ export function SessionRoomPage() {
           }
 
           case "combat_started": {
+            setError(null);
             setMap((prev) => {
               if (!prev || prev.id !== payload.mapId) return prev;
               return {
@@ -239,7 +246,9 @@ export function SessionRoomPage() {
             break;
           }
 
-          case "turn_changed": {
+          case "turn_changed":
+          case "combat_timer_updated": {
+            setError(null);
             setMap((prev) => {
               if (!prev || prev.id !== payload.mapId) return prev;
               return {
@@ -255,6 +264,7 @@ export function SessionRoomPage() {
               if (!prev || prev.id !== payload.mapId) return prev;
               return {
                 ...prev,
+                combat: payload.combat ?? prev.combat,
                 tokens: prev.tokens.map((t) =>
                   t.id === payload.targetToken.id ? payload.targetToken : t,
                 ),
@@ -264,6 +274,7 @@ export function SessionRoomPage() {
           }
 
           case "combat_ended": {
+            setError(null);
             setMap((prev) => {
               if (!prev || prev.id !== payload.mapId) return prev;
               return {
@@ -442,7 +453,7 @@ export function SessionRoomPage() {
   }
 
   function handleTokenClick(token: MapToken) {
-    if (!effectiveIsOwner && !map?.allowPlayerMovement) {
+    if (!effectiveIsOwner && !map?.allowPlayerMovement && !map?.combat?.active) {
       return;
     }
     if (!effectiveIsOwner && token.ownerId !== user?.id) {
@@ -453,6 +464,7 @@ export function SessionRoomPage() {
 
   function handleCellClick(x: number, y: number) {
     if (!selectedTokenId || !wsRef.current || !map) return;
+    setError(null);
     wsRef.current.send(
       JSON.stringify({
         type: "move_token",
@@ -466,6 +478,7 @@ export function SessionRoomPage() {
 
   function handleStartCombat() {
     if (!wsRef.current || !map) return;
+    setError(null);
     wsRef.current.send(
       JSON.stringify({
         type: "start_combat",
@@ -476,6 +489,7 @@ export function SessionRoomPage() {
 
   function handleNextTurn() {
     if (!wsRef.current || !map) return;
+    setError(null);
     wsRef.current.send(
       JSON.stringify({
         type: "next_turn",
@@ -484,19 +498,80 @@ export function SessionRoomPage() {
     );
   }
 
+  function handlePrevTurn() {
+    if (!wsRef.current || !map) return;
+    setError(null);
+    wsRef.current.send(
+      JSON.stringify({
+        type: "prev_turn",
+        mapId: map.id,
+      }),
+    );
+  }
+
+  function handleEndTurn() {
+    if (!wsRef.current || !map) return;
+    setError(null);
+    wsRef.current.send(
+      JSON.stringify({
+        type: "end_turn",
+        mapId: map.id,
+      }),
+    );
+  }
+
+  function handleAddTimer(e: FormEvent) {
+    e.preventDefault();
+    if (!wsRef.current || !map) return;
+    const name = timerName.trim() || "Round Timer";
+    const durationRounds = Math.max(1, Number.parseInt(timerRounds, 10) || 3);
+    wsRef.current.send(
+      JSON.stringify({
+        type: "add_combat_timer",
+        mapId: map.id,
+        timer: {
+          name,
+          category: timerCategory,
+          scope: timerScope,
+          entityId: timerScope === "personal" ? (activeCombatant?.id ?? null) : null,
+          durationRounds,
+        },
+      }),
+    );
+    setTimerName("");
+  }
+
+  function handleRemoveTimer(timerId: string) {
+    if (!wsRef.current || !map) return;
+    wsRef.current.send(
+      JSON.stringify({
+        type: "remove_combat_timer",
+        mapId: map.id,
+        timerId,
+      }),
+    );
+  }
+
   function handleCombatAttack() {
     if (!wsRef.current || !map || !map.combat?.activeTokenId) return;
-    const targets = map.tokens.filter(
-      (t) => t.type !== "ITEM",
-    );
-    const target = targets.find((t) => t.id === combatTargetId) || targets.find((t) => t.id !== map.combat?.activeTokenId) || targets[0];
+    setError(null);
+    const targets = map.tokens.filter((t) => t.type !== "ITEM");
+    const myCharacterToken = !effectiveIsOwner
+      ? map.tokens.find((t) => t.type === "CHARACTER" && t.ownerId === user?.id)
+      : null;
+    const attackerId =
+      !effectiveIsOwner && myCharacterToken ? myCharacterToken.id : map.combat.activeTokenId;
+    const target =
+      targets.find((t) => t.id === combatTargetId) ||
+      targets.find((t) => t.id !== attackerId) ||
+      targets[0];
     if (!target) return;
 
     wsRef.current.send(
       JSON.stringify({
         type: "combat_attack",
         mapId: map.id,
-        attackerId: map.combat.activeTokenId,
+        attackerId,
         targetId: target.id,
       }),
     );
@@ -504,6 +579,7 @@ export function SessionRoomPage() {
 
   function handleEndCombat() {
     if (!wsRef.current || !map) return;
+    setError(null);
     wsRef.current.send(
       JSON.stringify({
         type: "end_combat",
@@ -530,10 +606,23 @@ export function SessionRoomPage() {
 
   const effectiveIsOwner = isOwner || user?.role === "GM";
   const visibleMessages = messages.filter((m) => !m.deleted);
-  const activeCombatant = map?.tokens.find((t) => t.id === map?.combat?.activeTokenId);
-  const potentialTargets = map
-    ? map.tokens.filter((t) => t.type !== "ITEM")
-    : [];
+  const activeTurnEntityId = map?.combat?.activeTurnEntityId ?? map?.combat?.activeTokenId ?? null;
+  const activeCombatant = map?.tokens.find((t) => t.id === activeTurnEntityId);
+  const currentRoundNumber = map?.combat?.roundNumber ?? map?.combat?.round ?? 1;
+  const isMyTurn = Boolean(
+    map?.combat?.active &&
+      activeCombatant &&
+      activeCombatant.type === "CHARACTER" &&
+      activeCombatant.ownerId === user?.id,
+  );
+  const potentialTargets = map ? map.tokens.filter((t) => t.type !== "ITEM") : [];
+  const selectedToken = map?.tokens.find((t) => t.id === selectedTokenId) ?? null;
+
+  // Build live Turn Queue items from combat.turnOrder + map.tokens
+  const turnQueueItems = (map?.combat?.turnOrder ?? [])
+    .map((entityId) => map?.tokens.find((t) => t.id === entityId))
+    .filter((t): t is MapToken => Boolean(t && (t.type === "CHARACTER" || t.type === "MONSTER")));
+  const combatTimers = map?.combat?.timers ?? [];
 
   return (
     <main data-testid="page-session" className="page session-page">
@@ -656,11 +745,77 @@ export function SessionRoomPage() {
           {map.combat?.active && (
             <div data-testid="combat-tracker" className="combat-tracker">
               <div className="combat-tracker-header">
-                <h3>⚔️ Combat Encounter — Round {map.combat.round}</h3>
+                <h3>
+                  ⚔️ Combat Encounter — Round{" "}
+                  <span data-testid="combat-round-number">{currentRoundNumber}</span>
+                </h3>
                 <div data-testid="active-turn-indicator" className="active-turn-indicator">
                   Turn: <strong>{activeCombatant?.name ?? "Active"}</strong>
                 </div>
               </div>
+
+              {/* Turn Validation Status Banner */}
+              <div
+                data-testid="turn-status-banner"
+                className={`turn-status-banner ${
+                  isMyTurn
+                    ? "turn-status-active"
+                    : effectiveIsOwner
+                      ? "turn-status-gm"
+                      : "turn-status-waiting"
+                }`}
+              >
+                {isMyTurn
+                  ? `🟢 Your Turn (${activeCombatant?.name}) — Move up to ${activeCombatant?.speed ?? 6} squares and execute actions`
+                  : effectiveIsOwner
+                    ? `🛡️ GM Turn Control — Active Combatant: ${activeCombatant?.name ?? "None"}`
+                    : `⏳ Waiting for ${activeCombatant?.name ?? "Active Combatant"} to finish their turn`}
+              </div>
+
+              {/* Visual Campaign Turn Queue */}
+              <div data-testid="turn-queue-list" className="turn-queue-list">
+                {turnQueueItems.map((participant, idx) => {
+                  const isCurrent = participant.id === activeTurnEntityId;
+                  const entityType = participant.type === "CHARACTER" ? "character" : "monster";
+                  return (
+                    <div
+                      key={participant.id}
+                      data-testid="turn-queue-item"
+                      data-entity-id={participant.id}
+                      data-entity-type={entityType}
+                      data-active={isCurrent ? "true" : "false"}
+                      className={`turn-queue-item ${isCurrent ? "turn-queue-item-active" : ""}`}
+                    >
+                      <span className="turn-queue-order">#{idx + 1}</span>
+                      <span data-testid="turn-queue-initiative" className="turn-queue-initiative">
+                        Init {participant.initiative}
+                      </span>
+                      <strong data-testid="turn-queue-name" className="turn-queue-name">
+                        {participant.name}
+                      </strong>
+                      <span
+                        data-testid="turn-queue-type"
+                        className={`turn-queue-type badge-${entityType}`}
+                      >
+                        {entityType}
+                      </span>
+                      <span data-testid="turn-queue-hp" className="turn-queue-hp">
+                        HP {participant.hpCurrent}/{participant.hpMax}
+                      </span>
+                      {isCurrent && (
+                        <span
+                          data-testid="turn-queue-active-badge"
+                          className="turn-queue-active-badge"
+                        >
+                          Active
+                        </span>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+
+              {/* Combat & Turn Progression Controls */}
               <div className="combat-controls">
                 <label>
                   Target:{" "}
@@ -685,24 +840,124 @@ export function SessionRoomPage() {
                 >
                   ⚔️ Attack
                 </button>
-                <button
-                  data-testid="combat-next-button"
-                  type="button"
-                  className="btn btn-secondary"
-                  onClick={handleNextTurn}
-                >
-                  Next Turn ➔
-                </button>
                 {effectiveIsOwner && (
+                  <>
+                    <button
+                      data-testid="combat-prev-button"
+                      type="button"
+                      className="btn btn-secondary"
+                      onClick={handlePrevTurn}
+                    >
+                      ⬅ Previous Turn
+                    </button>
+                    <button
+                      data-testid="combat-next-button"
+                      type="button"
+                      className="btn btn-secondary"
+                      onClick={handleNextTurn}
+                    >
+                      Next Turn ➔
+                    </button>
+                    <button
+                      data-testid="combat-end-button"
+                      type="button"
+                      className="btn btn-outline-danger"
+                      onClick={handleEndCombat}
+                    >
+                      End Combat
+                    </button>
+                  </>
+                )}
+                {!effectiveIsOwner && isMyTurn && (
                   <button
-                    data-testid="combat-end-button"
+                    data-testid="combat-end-turn-button"
                     type="button"
-                    className="btn btn-outline-danger"
-                    onClick={handleEndCombat}
+                    className="btn btn-primary"
+                    onClick={handleEndTurn}
                   >
-                    End Combat
+                    End Turn ➔
                   </button>
                 )}
+              </div>
+
+              {/* Personal & GM Round Timer Countdowns */}
+              <div data-testid="combat-timers" className="combat-timers">
+                <div className="combat-timers-header">
+                  <strong>⏱️ Round Timers (Spells, Light, Dying)</strong>
+                </div>
+                {combatTimers.length > 0 && (
+                  <div className="combat-timer-list">
+                    {combatTimers.map((timer) => (
+                      <div
+                        key={timer.id}
+                        data-testid="combat-timer-item"
+                        className={`combat-timer-item ${timer.expired ? "timer-item-expired" : ""}`}
+                      >
+                        <span data-testid="combat-timer-name" className="combat-timer-name">
+                          {timer.name}
+                        </span>
+                        <span className="combat-timer-meta">
+                          ({timer.category} · {timer.scope})
+                        </span>
+                        <span data-testid="combat-timer-rounds" className="combat-timer-rounds">
+                          {timer.remainingRounds} {timer.remainingRounds === 1 ? "round" : "rounds"}
+                          {timer.expired ? " (Expired)" : ""}
+                        </span>
+                        <button
+                          data-testid="timer-delete-button"
+                          type="button"
+                          className="btn btn-danger btn-xs"
+                          onClick={() => handleRemoveTimer(timer.id)}
+                        >
+                          ✕
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                <form className="combat-timer-form" onSubmit={handleAddTimer}>
+                  <input
+                    data-testid="timer-name-input"
+                    type="text"
+                    placeholder="Timer name (e.g. Torch Light, Bless)…"
+                    value={timerName}
+                    onChange={(e) => setTimerName(e.target.value)}
+                  />
+                  <select
+                    data-testid="timer-category-select"
+                    value={timerCategory}
+                    onChange={(e) => setTimerCategory(e.target.value as any)}
+                  >
+                    <option value="light">Light</option>
+                    <option value="spell">Spell</option>
+                    <option value="dying">Dying</option>
+                    <option value="custom">Custom</option>
+                  </select>
+                  <select
+                    data-testid="timer-scope-select"
+                    value={timerScope}
+                    onChange={(e) => setTimerScope(e.target.value as any)}
+                  >
+                    <option value="personal">Personal</option>
+                    <option value="gm">GM</option>
+                  </select>
+                  <input
+                    data-testid="timer-rounds-input"
+                    type="number"
+                    min="1"
+                    max="100"
+                    value={timerRounds}
+                    onChange={(e) => setTimerRounds(e.target.value)}
+                    style={{ width: "64px" }}
+                  />
+                  <button
+                    data-testid="timer-add-button"
+                    type="submit"
+                    className="btn btn-secondary btn-sm"
+                  >
+                    + Add Timer
+                  </button>
+                </form>
               </div>
             </div>
           )}
@@ -761,19 +1016,30 @@ export function SessionRoomPage() {
               {Array.from({ length: map.height }, (_, y) =>
                 Array.from({ length: map.width }, (_, x) => {
                   const cellTokens = map.tokens.filter((t) => t.x === x && t.y === y);
+                  const isInMoveRange =
+                    selectedToken &&
+                    map.combat?.active &&
+                    selectedToken.id === activeTurnEntityId &&
+                    Math.max(Math.abs(x - selectedToken.x), Math.abs(y - selectedToken.y)) <=
+                      selectedToken.speed;
                   return (
                     <div
                       key={`${x}-${y}`}
                       data-testid={`map-cell-${x}-${y}`}
-                      className={`map-cell ${selectedTokenId ? "cell-selectable" : ""}`}
+                      data-in-range={isInMoveRange ? "true" : undefined}
+                      className={`map-cell ${selectedTokenId ? "cell-selectable" : ""} ${
+                        isInMoveRange ? "cell-in-range" : ""
+                      }`}
                       onClick={() => handleCellClick(x, y)}
                     >
                       {cellTokens.map((token) => {
                         const isSelected = selectedTokenId === token.id;
-                        const isTurn = map.combat?.active && map.combat.activeTokenId === token.id;
+                        const isTurn = map.combat?.active && activeTurnEntityId === token.id;
                         return (
                           <div
                             key={token.id}
+                            data-testid={`token-${token.id}`}
+                            data-active-turn={isTurn ? "true" : "false"}
                             className={`map-token token-${token.type.toLowerCase()} ${
                               isSelected ? "token-selected" : ""
                             } ${isTurn ? "token-active-turn" : ""}`}

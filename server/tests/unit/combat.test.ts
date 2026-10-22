@@ -1,9 +1,13 @@
 import { describe, expect, it } from "vitest";
 import {
   advanceTurn,
+  buildTurnQueue,
   doubleDiceCount,
   resolveAttack,
+  revertTurn,
   sortInitiative,
+  tickCombatTimers,
+  type CombatTimer,
 } from "../../src/modules/combat/combat.js";
 
 describe("Combat Engine (BR-43..BR-50)", () => {
@@ -26,15 +30,67 @@ describe("Combat Engine (BR-43..BR-50)", () => {
       const order = sortInitiative(combatants);
       expect(order).toEqual(["c2", "c1"]);
     });
+
+    it("builds a synchronized turnQueue with character and monster participant metadata", () => {
+      const tokens = [
+        {
+          id: "t-mon",
+          name: "Goblin Boss",
+          type: "MONSTER",
+          initiative: 12,
+          ownerId: null,
+          characterSheetId: null,
+          hpCurrent: 15,
+          hpMax: 15,
+          ac: 14,
+          speed: 6,
+        },
+        {
+          id: "t-pc",
+          name: "Aria",
+          type: "CHARACTER",
+          initiative: 18,
+          ownerId: "user-1",
+          characterSheetId: "sheet-1",
+          hpCurrent: 10,
+          hpMax: 10,
+          ac: 15,
+          speed: 6,
+        },
+      ];
+      const queue = buildTurnQueue(["t-pc", "t-mon"], tokens, "t-pc");
+      expect(queue).toHaveLength(2);
+      expect(queue[0]).toMatchObject({
+        id: "t-pc",
+        entityId: "t-pc",
+        name: "Aria",
+        type: "CHARACTER",
+        entityType: "character",
+        initiative: 18,
+        isActive: true,
+      });
+      expect(queue[1]).toMatchObject({
+        id: "t-mon",
+        entityId: "t-mon",
+        name: "Goblin Boss",
+        type: "MONSTER",
+        entityType: "monster",
+        initiative: 12,
+        isActive: false,
+      });
+    });
   });
 
-  describe("Turn & Round Cycling", () => {
-    it("advances turn to next combatant in the order", () => {
+  describe("Turn & Round Cycling (Next Turn & Previous Turn)", () => {
+    it("advances turn to next combatant in the order and tracks activeTurnEntityId and roundNumber", () => {
       const turnOrder = ["t1", "t2", "t3"];
       const res = advanceTurn(turnOrder, 0, 1);
       expect(res.nextTurnIndex).toBe(1);
       expect(res.nextRound).toBe(1);
+      expect(res.roundNumber).toBe(1);
       expect(res.activeTokenId).toBe("t2");
+      expect(res.activeTurnEntityId).toBe("t2");
+      expect(res.wrappedRound).toBe(false);
     });
 
     it("wraps around to the first combatant and increments the round", () => {
@@ -42,7 +98,94 @@ describe("Combat Engine (BR-43..BR-50)", () => {
       const res = advanceTurn(turnOrder, 2, 1);
       expect(res.nextTurnIndex).toBe(0);
       expect(res.nextRound).toBe(2);
+      expect(res.roundNumber).toBe(2);
       expect(res.activeTokenId).toBe("t1");
+      expect(res.activeTurnEntityId).toBe("t1");
+      expect(res.wrappedRound).toBe(true);
+    });
+
+    it("reverts turn to previous combatant within the same round", () => {
+      const turnOrder = ["t1", "t2", "t3"];
+      const res = revertTurn(turnOrder, 2, 2);
+      expect(res.prevTurnIndex).toBe(1);
+      expect(res.prevRound).toBe(2);
+      expect(res.roundNumber).toBe(2);
+      expect(res.activeTokenId).toBe("t2");
+      expect(res.activeTurnEntityId).toBe("t2");
+      expect(res.wrappedBack).toBe(false);
+    });
+
+    it("wraps backward to the last combatant of the previous round when reverting at index 0 on round > 1", () => {
+      const turnOrder = ["t1", "t2", "t3"];
+      const res = revertTurn(turnOrder, 0, 2);
+      expect(res.prevTurnIndex).toBe(2);
+      expect(res.prevRound).toBe(1);
+      expect(res.roundNumber).toBe(1);
+      expect(res.activeTokenId).toBe("t3");
+      expect(res.activeTurnEntityId).toBe("t3");
+      expect(res.wrappedBack).toBe(true);
+    });
+
+    it("clamps at Round 1, index 0 when reverting at the start of Round 1", () => {
+      const turnOrder = ["t1", "t2", "t3"];
+      const res = revertTurn(turnOrder, 0, 1);
+      expect(res.prevTurnIndex).toBe(0);
+      expect(res.prevRound).toBe(1);
+      expect(res.roundNumber).toBe(1);
+      expect(res.activeTokenId).toBe("t1");
+      expect(res.activeTurnEntityId).toBe("t1");
+      expect(res.wrappedBack).toBe(false);
+    });
+  });
+
+  describe("Personal & GM Round Timer Countdowns", () => {
+    it("decrements spell, light, and dying timers on full round wrap and marks expired at 0", () => {
+      const timers: CombatTimer[] = [
+        {
+          id: "tm-1",
+          name: "Torch Light",
+          category: "light",
+          scope: "personal",
+          entityId: "t1",
+          remainingRounds: 2,
+          initialRounds: 3,
+          expired: false,
+        },
+        {
+          id: "tm-2",
+          name: "Bless Spell",
+          category: "spell",
+          scope: "gm",
+          entityId: null,
+          remainingRounds: 1,
+          initialRounds: 2,
+          expired: false,
+        },
+        {
+          id: "tm-3",
+          name: "Dying (Aria)",
+          category: "dying",
+          scope: "personal",
+          entityId: "t1",
+          remainingRounds: 3,
+          initialRounds: 3,
+          expired: false,
+        },
+      ];
+
+      const ticked = tickCombatTimers(timers, -1);
+      expect(ticked[0].remainingRounds).toBe(1);
+      expect(ticked[0].expired).toBe(false);
+      expect(ticked[1].remainingRounds).toBe(0);
+      expect(ticked[1].expired).toBe(true);
+      expect(ticked[2].remainingRounds).toBe(2);
+      expect(ticked[2].expired).toBe(false);
+
+      // Restoring on previous turn round wrap
+      const restored = tickCombatTimers(ticked, 1);
+      expect(restored[0].remainingRounds).toBe(2);
+      expect(restored[1].remainingRounds).toBe(1);
+      expect(restored[1].expired).toBe(false);
     });
   });
 
