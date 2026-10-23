@@ -145,6 +145,8 @@ model SessionMap {
   session             GameSession  @relation(fields: [sessionId], references: [id], onDelete: Cascade)
   name                String       @default("Dungeon Map")
   theme               String       @default("stone-dungeon")
+  imageUrl            String?
+  presetKey           String?
   width               Int          @default(12)
   height              Int          @default(8)
   allowPlayerMovement Boolean      @default(false)
@@ -168,6 +170,8 @@ model MapToken {
   x                Int             @default(0)
   y                Int             @default(0)
   color            String          @default("#6366f1")
+  imageUrl         String?
+  avatarKey        String?
   hpMax            Int             @default(10)
   hpCurrent        Int             @default(10)
   ac               Int             @default(10)
@@ -175,21 +179,29 @@ model MapToken {
   attackBonus      Int             @default(0)
   damageFormula    String          @default("1d6")
   initiative       Int             @default(0)
+  dexModifier      Int             @default(0)
+  hasSurprise      Boolean         @default(false)
+  initiativeMeta   String          @default("{}")
   createdAt        DateTime        @default(now())
   updatedAt        DateTime        @updatedAt
 }
 
 model CombatState {
-  id            String     @id @default(cuid())
-  mapId         String     @unique
-  map           SessionMap @relation(fields: [mapId], references: [id], onDelete: Cascade)
-  active        Boolean    @default(false)
-  round         Int        @default(1)
-  turnIndex     Int        @default(0)
-  activeTokenId String?
-  turnOrder     String     @default("[]")
-  createdAt     DateTime   @default(now())
-  updatedAt     DateTime   @updatedAt
+  id                     String     @id @default(cuid())
+  mapId                  String     @unique
+  map                    SessionMap @relation(fields: [mapId], references: [id], onDelete: Cascade)
+  active                 Boolean    @default(false)
+  round                  Int        @default(1)
+  turnIndex              Int        @default(0)
+  activeTokenId          String?
+  turnOrder              String     @default("[]")
+  timers                 String     @default("[]")
+  chaosMode              Boolean    @default(false)
+  groupMonsterInitiative Boolean    @default(false)
+  isSurpriseRound        Boolean    @default(false)
+  freeformMode           Boolean    @default(false)
+  createdAt              DateTime   @default(now())
+  updatedAt              DateTime   @updatedAt
 }
 
 model ThemeConfig {

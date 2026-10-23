@@ -1,0 +1,28 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="100" height="100">
+  <defs>
+    <radialGradient id="goblinBg" cx="50%" cy="40%" r="55%">
+      <stop offset="0%" stop-color="#4d7c0f"/>
+      <stop offset="100%" stop-color="#14532d"/>
+    </radialGradient>
+  </defs>
+  <circle cx="50" cy="50" r="48" fill="url(#goblinBg)" stroke="#84cc16" stroke-width="3"/>
+  <!-- Goblin face: pointed ears, wicked grin, yellow eyes -->
+  <g fill="#65a30d" stroke="#1f2937" stroke-width="2" stroke-linejoin="round">
+    <!-- Pointed Ears -->
+    <polygon points="34,42 12,32 30,54"/>
+    <polygon points="66,42 88,32 70,54"/>
+    <!-- Head -->
+    <path d="M50 24 C34 24 32 36 32 54 C32 72 44 80 50 80 C56 80 68 72 68 54 C68 36 66 24 50 24 Z"/>
+    <!-- Eyes -->
+    <circle cx="42" cy="46" r="3.5" fill="#fde047" stroke="#ca8a04" stroke-width="1"/>
+    <circle cx="58" cy="46" r="3.5" fill="#fde047" stroke="#ca8a04" stroke-width="1"/>
+    <circle cx="43" cy="46" r="1.5" fill="#000" stroke="none"/>
+    <circle cx="57" cy="46" r="1.5" fill="#000" stroke="none"/>
+    <!-- Snout & Grin -->
+    <path d="M48 54 L52 54" stroke="#365314" stroke-width="2"/>
+    <path d="M38 64 Q50 74 62 64" fill="none" stroke="#1f2937" stroke-width="2.5"/>
+    <polygon points="44,66 46,70 48,66" fill="#fff" stroke="none"/>
+    <polygon points="52,66 54,70 56,66" fill="#fff" stroke="none"/>
+  </g>
+  <circle cx="50" cy="50" r="47" fill="none" stroke="#052e16" stroke-width="1.5" opacity="0.6"/>
+</svg>

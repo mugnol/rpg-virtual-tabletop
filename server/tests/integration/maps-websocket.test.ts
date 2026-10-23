@@ -200,6 +200,30 @@ describe("WebSocket Real-time Maps, Tokens & Combat (BR-35..BR-50)", () => {
     const combatMsg = await combatPromise;
     expect((combatMsg.combat as any).active).toBe(true);
     expect((combatMsg.combat as any).turnOrder.length).toBe(2);
+    expect((combatMsg.combat as any).roundNumber).toBe(1);
+    expect((combatMsg.combat as any).activeTurnEntityId).toBe(tokenId);
+    expect((combatMsg.combat as any).turnQueue).toHaveLength(2);
+    expect((combatMsg.combat as any).turnQueue[0].entityType).toBe("character");
+    expect((combatMsg.combat as any).turnQueue[1].entityType).toBe("monster");
+
+    // GM adds a round timer; playerWs receives combat_timer_updated
+    const timerPromise = waitForMessage(playerWs, (msg) => msg.type === "combat_timer_updated");
+    gmWs.send(
+      JSON.stringify({
+        type: "add_combat_timer",
+        mapId,
+        timer: {
+          name: "Torch Light",
+          category: "light",
+          scope: "personal",
+          entityId: tokenId,
+          durationRounds: 3,
+        },
+      }),
+    );
+    const timerMsg = await timerPromise;
+    expect((timerMsg.combat as any).timers).toHaveLength(1);
+    expect((timerMsg.combat as any).timers[0].remainingRounds).toBe(3);
 
     // GM triggers combat attack; playerWs receives combat_attack
     const attackPromise = waitForMessage(playerWs, (msg) => msg.type === "combat_attack");
@@ -215,6 +239,139 @@ describe("WebSocket Real-time Maps, Tokens & Combat (BR-35..BR-50)", () => {
     const attackMsg = await attackPromise;
     expect((attackMsg.attack as any).hit).toBe(true);
     expect((attackMsg.targetToken as any).hpCurrent).toBeLessThan(30);
+
+    // Active player sends end_turn; GM and player both receive turn_changed with trollId active
+    const endTurnGmPromise = waitForMessage(gmWs, (msg) => msg.type === "turn_changed");
+    const endTurnPlayerPromise = waitForMessage(playerWs, (msg) => msg.type === "turn_changed");
+    playerWs.send(JSON.stringify({ type: "end_turn", mapId }));
+    const [endTurnMsg] = await Promise.all([endTurnGmPromise, endTurnPlayerPromise]);
+    expect((endTurnMsg.combat as any).activeTurnEntityId).toBe(trollId);
+    expect((endTurnMsg.combat as any).roundNumber).toBe(1);
+
+    // Player tries to attack out of turn; receives error NOT_YOUR_TURN
+    const errorPromise = waitForMessage(playerWs, (msg) => msg.type === "error");
+    playerWs.send(
+      JSON.stringify({
+        type: "combat_attack",
+        mapId,
+        attackerId: tokenId,
+        targetId: trollId,
+      }),
+    );
+    const errorMsg = await errorPromise;
+    expect(errorMsg.code).toBe("NOT_YOUR_TURN");
+
+    // GM sends next_turn completing full cycle; roundNumber increments to 2 and timer ticks down to 2
+    const wrapTurnPromise = waitForMessage(playerWs, (msg) => msg.type === "turn_changed");
+    gmWs.send(JSON.stringify({ type: "next_turn", mapId }));
+    const wrapTurnMsg = await wrapTurnPromise;
+    expect((wrapTurnMsg.combat as any).roundNumber).toBe(2);
+    expect((wrapTurnMsg.combat as any).activeTurnEntityId).toBe(tokenId);
+    expect((wrapTurnMsg.combat as any).timers[0].remainingRounds).toBe(2);
+
+    // GM sends prev_turn; reverts back to Round 1, trollId active, timer restored to 3
+    const prevTurnPromise = waitForMessage(playerWs, (msg) => msg.type === "turn_changed");
+    gmWs.send(JSON.stringify({ type: "prev_turn", mapId }));
+    const prevTurnMsg = await prevTurnPromise;
+    expect((prevTurnMsg.combat as any).roundNumber).toBe(1);
+    expect((prevTurnMsg.combat as any).activeTurnEntityId).toBe(trollId);
+    expect((prevTurnMsg.combat as any).timers[0].remainingRounds).toBe(3);
+
+    // GM manually overrides Cave Troll's initiative via set_initiative; playerWs receives initiative_updated
+    const setInitPromise = waitForMessage(playerWs, (msg) => msg.type === "initiative_updated");
+    gmWs.send(
+      JSON.stringify({
+        type: "set_initiative",
+        mapId,
+        tokenId: trollId,
+        initiative: 25,
+      }),
+    );
+    const setInitMsg = await setInitPromise;
+    expect((setInitMsg.combat as any).turnQueue[0].entityId).toBe(trollId);
+    expect((setInitMsg.combat as any).turnQueue[0].initiative).toBe(25);
+
+    // Player rolls initiative for their own character via roll_initiative; both clients receive initiative_updated
+    const rollInitPromise = waitForMessage(playerWs, (msg) => msg.type === "initiative_updated");
+    playerWs.send(
+      JSON.stringify({
+        type: "roll_initiative",
+        mapId,
+        tokenId,
+        forcedRolls: [20],
+      }),
+    );
+    const rollInitMsg = await rollInitPromise;
+    const heroEntry = (rollInitMsg.combat as any).turnQueue.find(
+      (e: { entityId: string }) => e.entityId === tokenId,
+    );
+    expect(heroEntry.initiative).toBeGreaterThanOrEqual(20);
+
+    // GM toggles surprise on hero and enables chaosMode via WebSocket
+    const surpriseWsPromise = waitForMessage(playerWs, (msg) => msg.type === "initiative_updated");
+    gmWs.send(
+      JSON.stringify({
+        type: "toggle_surprise",
+        mapId,
+        tokenId,
+        hasSurprise: true,
+      }),
+    );
+    const surpriseWsMsg = await surpriseWsPromise;
+    const surprisedHero = (surpriseWsMsg.combat as any).turnQueue.find(
+      (e: { entityId: string }) => e.entityId === tokenId,
+    );
+    expect(surprisedHero.hasSurprise).toBe(true);
+
+    const settingsWsPromise = waitForMessage(playerWs, (msg) => msg.type === "initiative_updated");
+    gmWs.send(
+      JSON.stringify({
+        type: "update_combat_settings",
+        mapId,
+        chaosMode: true,
+        groupMonsterInitiative: true,
+      }),
+    );
+    const settingsWsMsg = await settingsWsPromise;
+    expect((settingsWsMsg.combat as any).chaosMode).toBe(true);
+    expect((settingsWsMsg.combat as any).groupMonsterInitiative).toBe(true);
+
+    // Player attempts to reorder turn queue over WebSocket -> receives error FORBIDDEN
+    const playerReorderErrorPromise = waitForMessage(playerWs, (msg) => msg.type === "error");
+    playerWs.send(
+      JSON.stringify({
+        type: "reorder_turn_queue",
+        mapId,
+        orderedTokenIds: [trollId, tokenId],
+      }),
+    );
+    const playerReorderError = await playerReorderErrorPromise;
+    expect(playerReorderError.code).toBe("FORBIDDEN");
+
+    // GM reorders turn queue via WebSocket; player receives turn_queue_reordered
+    const gmReorderPromise = waitForMessage(playerWs, (msg) => msg.type === "turn_queue_reordered");
+    gmWs.send(
+      JSON.stringify({
+        type: "reorder_turn_queue",
+        mapId,
+        orderedTokenIds: [trollId, tokenId],
+      }),
+    );
+    const gmReorderMsg = await gmReorderPromise;
+    expect((gmReorderMsg.combat as any).turnOrder).toEqual([trollId, tokenId]);
+
+    // GM moves token down by 1 position via WebSocket
+    const gmMoveDownPromise = waitForMessage(playerWs, (msg) => msg.type === "turn_queue_reordered");
+    gmWs.send(
+      JSON.stringify({
+        type: "reorder_turn_queue",
+        mapId,
+        tokenId: trollId,
+        direction: "down",
+      }),
+    );
+    const gmMoveDownMsg = await gmMoveDownPromise;
+    expect((gmMoveDownMsg.combat as any).turnOrder).toEqual([tokenId, trollId]);
 
     // GM ends combat; playerWs receives combat_ended
     const endPromise = waitForMessage(playerWs, (msg) => msg.type === "combat_ended");

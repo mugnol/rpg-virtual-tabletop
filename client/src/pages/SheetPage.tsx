@@ -2,6 +2,8 @@ import { useEffect, useState, type FormEvent } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import {
   deleteSheet,
+  executeShadowdarkAction,
+  exportShadowdarklingsSheet,
   getCampaign,
   getSheet,
   getSystem,
@@ -29,6 +31,7 @@ export function SheetPage() {
   const [actionError, setActionError] = useState<string | null>(null);
   const [editing, setEditing] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [exportedJson, setExportedJson] = useState<string | null>(null);
 
   useEffect(() => {
     if (!id) return;
@@ -116,6 +119,34 @@ export function SheetPage() {
     }
   }
 
+  async function onExportShadowdarklings() {
+    if (!sheet) return;
+    setActionError(null);
+    setBusy(true);
+    try {
+      const { character } = await exportShadowdarklingsSheet(sheet.id);
+      setExportedJson(JSON.stringify(character, null, 2));
+    } catch (err) {
+      setActionError(err instanceof Error ? err.message : "Failed to export Shadowdarklings JSON");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function onShadowdarkRest() {
+    if (!sheet) return;
+    setActionError(null);
+    setBusy(true);
+    try {
+      const { sheet: updated } = await executeShadowdarkAction(sheet.id, { action: "rest" });
+      setSheet(updated);
+    } catch (err) {
+      setActionError(err instanceof Error ? err.message : "Failed to rest");
+    } finally {
+      setBusy(false);
+    }
+  }
+
   return (
     <main data-testid="page-sheet" className="page">
       <p>
@@ -130,6 +161,15 @@ export function SheetPage() {
       <p data-testid="sheet-identity" className="detail-description">
         {ancestryName} &middot; {className} &middot; {backgroundName}
       </p>
+      {sheet.derived.shadowdark && (
+        <p className="detail-description">
+          Title: <strong data-testid="sheet-title">{sheet.derived.shadowdark.title}</strong>
+          {" · "}Alignment:{" "}
+          <strong data-testid="sheet-alignment">{sheet.derived.shadowdark.alignment}</strong>
+          {" · "}Deity:{" "}
+          <strong data-testid="sheet-deity">{sheet.derived.shadowdark.deity ?? "None"}</strong>
+        </p>
+      )}
 
       <div className="card stats-bar">
         <div className="stat-box">
@@ -204,6 +244,28 @@ export function SheetPage() {
                 Level up
               </button>
             )}
+            {sheet.derived.shadowdark && (
+              <>
+                <button
+                  data-testid="export-shadowdarklings-button"
+                  type="button"
+                  className="btn btn-secondary"
+                  disabled={busy}
+                  onClick={onExportShadowdarklings}
+                >
+                  Export Shadowdarklings JSON
+                </button>
+                <button
+                  data-testid="shadowdark-rest-button"
+                  type="button"
+                  className="btn btn-secondary"
+                  disabled={busy}
+                  onClick={onShadowdarkRest}
+                >
+                  Rest (8 hrs)
+                </button>
+              </>
+            )}
             <button
               data-testid="sheet-delete-button"
               type="button"
@@ -215,6 +277,20 @@ export function SheetPage() {
             </button>
           </div>
           <FormError message={actionError} />
+          {exportedJson && (
+            <pre
+              data-testid="shadowdarklings-json-preview"
+              style={{
+                marginTop: "0.75rem",
+                padding: "0.75rem",
+                maxHeight: "16rem",
+                overflow: "auto",
+                fontSize: "0.8rem",
+              }}
+            >
+              {exportedJson}
+            </pre>
+          )}
         </section>
       )}
 

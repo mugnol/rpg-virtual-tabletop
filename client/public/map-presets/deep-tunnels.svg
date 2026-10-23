@@ -1,0 +1,27 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 600" width="100%" height="100%" preserveAspectRatio="none">
+  <defs>
+    <radialGradient id="tunnelBg" cx="50%" cy="50%" r="75%">
+      <stop offset="0%" stop-color="#191724"/>
+      <stop offset="50%" stop-color="#0e0c15"/>
+      <stop offset="100%" stop-color="#050408"/>
+    </radialGradient>
+  </defs>
+  <rect width="800" height="600" fill="url(#tunnelBg)"/>
+  <!-- Subterranean chasm fissure running across center -->
+  <path d="M 0 320 Q 200 240 380 340 T 800 280 L 800 360 Q 600 420 420 380 T 0 380 Z" fill="#040306" stroke="#2e283d" stroke-width="2"/>
+  <!-- Glowing crystalline veins / mineral deposits -->
+  <g stroke="#9333ea" stroke-width="2" fill="none" opacity="0.6">
+    <path d="M 60 120 L 120 180 L 160 150 L 220 210"/>
+    <path d="M 620 450 L 680 400 L 720 460 L 760 420"/>
+    <path d="M 320 80 L 360 130 L 420 90"/>
+    <circle cx="160" cy="150" r="3" fill="#c084fc"/>
+    <circle cx="680" cy="400" r="3" fill="#c084fc"/>
+  </g>
+  <!-- Rough hewn passage outlines -->
+  <g stroke="#3b324d" stroke-width="2.5" fill="none" opacity="0.7">
+    <path d="M 50 40 L 750 40"/>
+    <path d="M 50 560 L 750 560"/>
+    <path d="M 50 40 L 50 560"/>
+    <path d="M 750 40 L 750 560"/>
+  </g>
+</svg>

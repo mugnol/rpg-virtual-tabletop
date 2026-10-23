@@ -6,13 +6,23 @@ import { prisma } from "../db.js";
 import { verifySessionToken } from "../lib/tokens.js";
 import { rollDice } from "../modules/dice/dice.js";
 import {
+  addCombatTimer,
   deleteToken,
   endCombat,
   executeCombatAttack,
+  formatMapWithCombat,
+  getMap,
   moveOrUpdateToken,
   nextCombatTurn,
   placeToken,
+  previousCombatTurn,
+  removeCombatTimer,
+  reorderCombatTurnQueue,
+  rollCombatInitiative,
+  setCombatInitiative,
   startCombat,
+  toggleTokenSurprise,
+  updateCombatSettings,
   updateMap,
 } from "../modules/maps/service.js";
 import { findSessionWithCampaign } from "../modules/sessions/service.js";
@@ -183,6 +193,7 @@ export function attachWebSocketServer(server: http.Server): WebSocketServer {
                       round: 1,
                       turnIndex: 0,
                       turnOrder: "[]",
+                      timers: "[]",
                     },
                   },
                 },
@@ -215,15 +226,7 @@ export function attachWebSocketServer(server: http.Server): WebSocketServer {
                   deleted: m.deleted,
                   createdAt: m.createdAt,
                 })),
-                maps: maps.map((m) => ({
-                  ...m,
-                  combat: m.combat
-                    ? {
-                        ...m.combat,
-                        turnOrder: JSON.parse(m.combat.turnOrder) as string[],
-                      }
-                    : null,
-                })),
+                maps: maps.map(formatMapWithCombat),
               }),
             );
 
@@ -406,21 +409,24 @@ export function attachWebSocketServer(server: http.Server): WebSocketServer {
               }
 
               // --- Phase 4: Maps, Tokens & Combat ---
+              case "switch_map": {
+                const mapId = typeof payload.mapId === "string" ? payload.mapId : "";
+                const targetMap = await getMap(user.id, mapId);
+                broadcastToRoom(sessionId, {
+                  type: "active_map_changed",
+                  mapId,
+                  map: targetMap,
+                });
+                break;
+              }
+
               case "update_map": {
                 const mapId = typeof payload.mapId === "string" ? payload.mapId : "";
                 const data = (payload.data ?? {}) as Record<string, unknown>;
                 const updated = await updateMap(user.id, mapId, data);
                 broadcastToRoom(sessionId, {
                   type: "map_updated",
-                  map: {
-                    ...updated,
-                    combat: updated.combat
-                      ? {
-                          ...updated.combat,
-                          turnOrder: JSON.parse(updated.combat.turnOrder) as string[],
-                        }
-                      : null,
-                  },
+                  map: updated,
                 });
                 break;
               }
@@ -429,10 +435,12 @@ export function attachWebSocketServer(server: http.Server): WebSocketServer {
                 const mapId = typeof payload.mapId === "string" ? payload.mapId : "";
                 const tokenData = (payload.token ?? {}) as any;
                 const token = await placeToken(user.id, mapId, tokenData);
+                const latestMap = await getMap(user.id, mapId);
                 broadcastToRoom(sessionId, {
                   type: "token_placed",
                   mapId,
                   token,
+                  combat: latestMap.combat,
                 });
                 break;
               }
@@ -472,7 +480,16 @@ export function attachWebSocketServer(server: http.Server): WebSocketServer {
 
               case "start_combat": {
                 const mapId = typeof payload.mapId === "string" ? payload.mapId : "";
-                const res = await startCombat(user.id, mapId);
+                const chaosMode =
+                  typeof payload.chaosMode === "boolean" ? payload.chaosMode : undefined;
+                const groupMonsterInitiative =
+                  typeof payload.groupMonsterInitiative === "boolean"
+                    ? payload.groupMonsterInitiative
+                    : undefined;
+                const res = await startCombat(user.id, mapId, {
+                  chaosMode,
+                  groupMonsterInitiative,
+                });
                 broadcastToRoom(sessionId, {
                   type: "combat_started",
                   mapId,
@@ -482,11 +499,207 @@ export function attachWebSocketServer(server: http.Server): WebSocketServer {
                 break;
               }
 
-              case "next_turn": {
+              case "roll_initiative": {
+                const mapId = typeof payload.mapId === "string" ? payload.mapId : "";
+                const tokenId =
+                  typeof payload.tokenId === "string" ? payload.tokenId : undefined;
+                const forcedRolls = Array.isArray(payload.forcedRolls)
+                  ? (payload.forcedRolls as number[])
+                  : undefined;
+                const res = await rollCombatInitiative(user.id, mapId, {
+                  tokenId,
+                  forcedRolls,
+                });
+                broadcastToRoom(sessionId, {
+                  type: "initiative_updated",
+                  mapId,
+                  combat: res.combat,
+                  tokens: res.tokens,
+                });
+                broadcastToRoom(sessionId, {
+                  type: "chat_message",
+                  message: {
+                    id: res.message.id,
+                    sessionId,
+                    userId: user.id,
+                    userName: user.displayName,
+                    type: "COMBAT",
+                    content: res.message.content,
+                    deleted: false,
+                    createdAt: res.message.createdAt,
+                  },
+                });
+                break;
+              }
+
+              case "set_initiative": {
+                const mapId = typeof payload.mapId === "string" ? payload.mapId : "";
+                const tokenId = typeof payload.tokenId === "string" ? payload.tokenId : "";
+                const initiative =
+                  typeof payload.initiative === "number"
+                    ? Math.trunc(payload.initiative)
+                    : 0;
+                const res = await setCombatInitiative(user.id, mapId, {
+                  tokenId,
+                  initiative,
+                });
+                broadcastToRoom(sessionId, {
+                  type: "initiative_updated",
+                  mapId,
+                  combat: res.combat,
+                  tokens: res.tokens,
+                });
+                break;
+              }
+
+              case "toggle_surprise": {
+                const mapId = typeof payload.mapId === "string" ? payload.mapId : "";
+                const tokenId = typeof payload.tokenId === "string" ? payload.tokenId : "";
+                const hasSurprise =
+                  typeof payload.hasSurprise === "boolean" ? payload.hasSurprise : undefined;
+                const res = await toggleTokenSurprise(user.id, mapId, {
+                  tokenId,
+                  hasSurprise,
+                });
+                broadcastToRoom(sessionId, {
+                  type: "initiative_updated",
+                  mapId,
+                  combat: res.combat,
+                  tokens: res.tokens,
+                });
+                break;
+              }
+
+              case "update_combat_settings": {
+                const mapId = typeof payload.mapId === "string" ? payload.mapId : "";
+                const chaosMode =
+                  typeof payload.chaosMode === "boolean" ? payload.chaosMode : undefined;
+                const groupMonsterInitiative =
+                  typeof payload.groupMonsterInitiative === "boolean"
+                    ? payload.groupMonsterInitiative
+                    : undefined;
+                const freeformMode =
+                  typeof payload.freeformMode === "boolean" ? payload.freeformMode : undefined;
+                const res = await updateCombatSettings(user.id, mapId, {
+                  chaosMode,
+                  groupMonsterInitiative,
+                  freeformMode,
+                });
+                broadcastToRoom(sessionId, {
+                  type: "initiative_updated",
+                  mapId,
+                  combat: res.combat,
+                  tokens: res.tokens,
+                });
+                break;
+              }
+
+              case "reorder_turn_queue": {
+                if (!isOwner) {
+                  ws.send(
+                    JSON.stringify({
+                      type: "error",
+                      code: "FORBIDDEN",
+                      message: "Only the GM can reorder the turn queue",
+                    }),
+                  );
+                  return;
+                }
+                const mapId = typeof payload.mapId === "string" ? payload.mapId : "";
+                const orderedTokenIds = Array.isArray(payload.orderedTokenIds)
+                  ? (payload.orderedTokenIds as string[])
+                  : undefined;
+                const tokenId = typeof payload.tokenId === "string" ? payload.tokenId : undefined;
+                const direction =
+                  payload.direction === "up" || payload.direction === "down"
+                    ? (payload.direction as "up" | "down")
+                    : undefined;
+                const res = await reorderCombatTurnQueue(user.id, mapId, {
+                  orderedTokenIds,
+                  tokenId,
+                  direction,
+                });
+                broadcastToRoom(sessionId, {
+                  type: "turn_queue_reordered",
+                  mapId,
+                  combat: res.combat,
+                });
+                break;
+              }
+
+              case "next_turn":
+              case "end_turn": {
                 const mapId = typeof payload.mapId === "string" ? payload.mapId : "";
                 const res = await nextCombatTurn(user.id, mapId);
+                const latestMap = await getMap(user.id, mapId);
                 broadcastToRoom(sessionId, {
                   type: "turn_changed",
+                  mapId,
+                  combat: res,
+                  tokens: latestMap.tokens,
+                });
+                break;
+              }
+
+              case "prev_turn":
+              case "previous_turn": {
+                const mapId = typeof payload.mapId === "string" ? payload.mapId : "";
+                const res = await previousCombatTurn(user.id, mapId);
+                broadcastToRoom(sessionId, {
+                  type: "turn_changed",
+                  mapId,
+                  combat: res,
+                });
+                break;
+              }
+
+              case "add_combat_timer": {
+                const mapId = typeof payload.mapId === "string" ? payload.mapId : "";
+                const timerInput = (payload.timer ?? {}) as Record<string, unknown>;
+                const name =
+                  typeof timerInput.name === "string" && timerInput.name.trim()
+                    ? timerInput.name.trim()
+                    : "Timer";
+                const category = (
+                  ["spell", "light", "dying", "custom"].includes(timerInput.category as string)
+                    ? timerInput.category
+                    : "custom"
+                ) as "spell" | "light" | "dying" | "custom";
+                const scope = (
+                  ["personal", "gm"].includes(timerInput.scope as string)
+                    ? timerInput.scope
+                    : timerInput.entityId
+                      ? "personal"
+                      : "gm"
+                ) as "personal" | "gm";
+                const entityId =
+                  typeof timerInput.entityId === "string" ? timerInput.entityId : null;
+                const durationRounds =
+                  typeof timerInput.durationRounds === "number"
+                    ? Math.max(1, Math.floor(timerInput.durationRounds))
+                    : 3;
+
+                const res = await addCombatTimer(user.id, mapId, {
+                  name,
+                  category,
+                  scope,
+                  entityId,
+                  durationRounds,
+                });
+                broadcastToRoom(sessionId, {
+                  type: "combat_timer_updated",
+                  mapId,
+                  combat: res,
+                });
+                break;
+              }
+
+              case "remove_combat_timer": {
+                const mapId = typeof payload.mapId === "string" ? payload.mapId : "";
+                const timerId = typeof payload.timerId === "string" ? payload.timerId : "";
+                const res = await removeCombatTimer(user.id, mapId, timerId);
+                broadcastToRoom(sessionId, {
+                  type: "combat_timer_updated",
                   mapId,
                   combat: res,
                 });
@@ -505,6 +718,7 @@ export function attachWebSocketServer(server: http.Server): WebSocketServer {
                   mapId,
                   attack: res.attack,
                   targetToken: res.targetToken,
+                  combat: res.combat,
                 });
 
                 // Broadcast combat log to chat feed

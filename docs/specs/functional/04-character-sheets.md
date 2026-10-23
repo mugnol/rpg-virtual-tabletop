@@ -67,15 +67,32 @@ carry capacity) all come from configuration, not from hard-coded rules.
 ### UC-25 Change a campaign's system
 - The campaign owner may switch the campaign to another installed system (or none). Existing sheets keep their stored values; derived numbers recompute against the new configuration. (Values that no longer validate — e.g. a class that doesn't exist in the new system — are shown as raw text and must be re-picked on next edit; they do not block reading.)
 
-## 4. UI Summary (Phase 2)
+### UC-26 Shadowdarklings JSON Import and Export
+- **Actor:** Campaign participant (Import creates a PC; Export works on any readable sheet)
+- **Main flow (Export):** User clicks "Export Shadowdarklings JSON" (`export-shadowdarklings-button`) or requests `GET /api/sheets/:id/shadowdarklings`. The server returns a bidirectional Shadowdarklings-compatible JSON document (`name`, `stats`, `rolledStats`, `ancestry`, `class`, `level`, `levels`, `XP`, `ambitiousTalent`, `title`, `alignment`, `background`, `deity`, `maxHitPoints`, `armorClass`, `gearSlotsTotal`, `gearSlotsUsed`, `goldRolled`, `gold`, `silver`, `copper`, `gear`, `treasures`, `magicItems`, `attacks`, `bonuses`, `talents`, `spellsKnown`, `languages`, `ledger`).
+- **Main flow (Import):** From the campaign detail page or via `POST /api/campaigns/:id/sheets/shadowdarklings`, the user submits a Shadowdarklings JSON document. The server maps all stats, ancestry, class, level (0–10), alignment, deity, background, title, HP, gear, coins, talents, spells, and languages into a persisted `CharacterSheet`.
+
+### UC-27 Random Shadowdark Character Generation (Level 0 & Level 1)
+- **Actor:** Campaign participant
+- **Main flow:** User clicks "Generate Random Character" (`generate-random-character-button`) or posts to `POST /api/campaigns/:id/sheets/generate` specifying `level: 0` (The Gauntlet) or `level: 1`. The server rolls `3d6` stats in order (with optional mulligan if all < 14), random ancestry, name (from d20 ancestry table), background (d20), alignment (d6), deity (d8), languages, class & talents (for Level 1, including Human *Ambitious* extra talent), spells (for Priest/Wizard), and starting gear (`1d4` d12 items for Level 0, or Crawling Kit + weapon + leather armor + 5 gp for Level 1), and creates the character sheet.
+
+### UC-28 Shadowdark Sheet Actions (Spellcasting, Focus, Rest, Carousing, Death & Light)
+- **Actor:** Sheet owner or Campaign GM
+- **Main flow:** Via `POST /api/sheets/:id/shadowdark-action` or sheet controls, the user can:
+  - Cast a known spell or scroll/wand (`cast_spell`), resolving `1d20 + mod + bonuses` vs `DC 10 + tier`, applying Nat 20 numerical doubling or Nat 1 Priest Penance / Wizard Mishap roll.
+  - Maintain or end a Focus spell (`maintain_focus`).
+  - Learn a wizard spell from a scroll (`learn_scroll`, `DC 15 INT`).
+  - Complete a Rest (`rest`, consuming 1 ration, `DC 12 CON` if interrupted, restoring HP, stats, and lost spells; supporting Grinder Mode).
+  - Carouse (`carouse`, rolling `1d8 + event bonus` for XP and outcomes).
+  - Roll or tick a Death Timer (`death_timer`, `dying_roll`, `stabilize` `DC 15 INT`).
+
+## 4. UI Summary (Phase 2 & Task 4)
 
 - `/systems` — installed systems, attribution lines, export, GM-only import form.
 - Campaign create/edit — system dropdown (installed systems + "None").
-- Campaign detail — "Sheets" section: list, "New character" (participants), "New NPC" (GM only).
-- `/sheets/:id` — the sheet page (UC-21), with edit mode and level-up for authorized users.
+- Campaign detail — "Sheets" section: list, "New character" (participants), "New NPC" (GM only), "Random Character" & "Import Shadowdarklings JSON" controls.
+- `/sheets/:id` — the sheet page (UC-21), displaying derived Shadowdark stats (title, alignment, deity, languages, gear slots used/total, weapon attacks, ancestry traits, talents, spells, coins) with edit mode, level-up (including Level 0 → Level 1 graduation), and Shadowdarklings JSON export.
 
-## 5. Out of Scope (Phase 2)
+## 5. Out of Scope
 
-- Skill proficiencies/expertise, feats, equipment inventories beyond armor/shield,
-  portraits, dice rollers for attacks/spells, death-save trackers.
-- Sheet templates/duplication, sheet visibility restrictions within a campaign.
+- Sheet visibility restrictions within a campaign.

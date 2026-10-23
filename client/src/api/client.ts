@@ -127,6 +127,45 @@ export interface SheetExtras {
   spells: string[];
   notes: string;
   coins: Record<string, number>;
+  alignment?: "Lawful" | "Neutral" | "Chaotic";
+  deity?: string | null;
+  title?: string | null;
+  languages?: string[];
+  weapons?: string[];
+  weaponMastery?: string[];
+  gear?: Array<{ name: string; slots: number; quantity?: number; type?: string }>;
+  lostSpells?: string[];
+  penanceSpells?: string[];
+  activeFocusSpell?: string | null;
+  luckTokens?: number;
+  lightTimer?: { active: boolean; source: string | null; remainingMinutes: number } | null;
+  deathTimer?: number | null;
+}
+
+export interface ShadowdarkDerived {
+  title: string;
+  alignment: string;
+  deity: string | null;
+  languages: string[];
+  ancestryTrait: { name: string; description: string } | null;
+  maxGearSlots: number;
+  usedGearSlots: number;
+  weapons: Array<{
+    key: string;
+    name: string;
+    cost: string;
+    type: string;
+    range: string;
+    damage: string;
+    slots: number;
+    properties: string[];
+    stats: {
+      attackBonus: number;
+      damageBonus: number;
+      damageFormula: string;
+    };
+  }>;
+  spellsKnownByTier: number[] | null;
 }
 
 export interface SheetDetail extends SheetSummary {
@@ -151,6 +190,7 @@ export interface SheetDetail extends SheetSummary {
       known: number;
       allowed: number;
     } | null;
+    shadowdark?: ShadowdarkDerived;
   };
 }
 
@@ -340,8 +380,38 @@ export function updateSheet(
   return request("PATCH", `/sheets/${id}`, input);
 }
 
-export function levelUpSheet(id: string): Promise<{ sheet: SheetDetail }> {
-  return request("POST", `/sheets/${id}/levelup`, {});
+export function levelUpSheet(
+  id: string,
+  input?: { classId?: string | null },
+): Promise<{ sheet: SheetDetail }> {
+  return request("POST", `/sheets/${id}/levelup`, input ?? {});
+}
+
+export function generateRandomSheet(
+  campaignId: string,
+  input?: { level?: 0 | 1; kind?: "PC" | "NPC"; name?: string },
+): Promise<{ sheet: SheetDetail }> {
+  return request("POST", `/campaigns/${campaignId}/sheets/generate`, input ?? {});
+}
+
+export function importShadowdarklingsSheet(
+  campaignId: string,
+  characterJson: Record<string, unknown>,
+): Promise<{ sheet: SheetDetail }> {
+  return request("POST", `/campaigns/${campaignId}/sheets/shadowdarklings`, characterJson);
+}
+
+export function exportShadowdarklingsSheet(
+  sheetId: string,
+): Promise<{ character: Record<string, unknown> }> {
+  return request("GET", `/sheets/${sheetId}/shadowdarklings`);
+}
+
+export function executeShadowdarkAction(
+  sheetId: string,
+  input: Record<string, unknown>,
+): Promise<{ result: Record<string, unknown>; sheet: SheetDetail }> {
+  return request("POST", `/sheets/${sheetId}/shadowdark-action`, input);
 }
 
 export function deleteSheet(id: string): Promise<void> {
@@ -419,6 +489,8 @@ export interface MapToken {
   x: number;
   y: number;
   color: string;
+  imageUrl?: string | null;
+  avatarKey?: string | null;
   hpMax: number;
   hpCurrent: number;
   ac: number;
@@ -426,6 +498,62 @@ export interface MapToken {
   attackBonus: number;
   damageFormula: string;
   initiative: number;
+  dexModifier?: number;
+  hasSurprise?: boolean;
+  initiativeMeta?: string;
+  monsterKey?: string;
+  monsterRole?: string;
+  level?: number;
+}
+
+export interface InitiativeRollMeta {
+  dice: number[];
+  keptDie: number;
+  dexModifier: number;
+  total: number;
+  hasAdvantage: boolean;
+  formula: string;
+}
+
+export interface TurnQueueEntry {
+  id: string;
+  entityId: string;
+  name: string;
+  type: "CHARACTER" | "MONSTER";
+  entityType: "character" | "monster";
+  initiative: number;
+  dexModifier?: number;
+  hasSurprise?: boolean;
+  hasInitiativeAdvantage?: boolean;
+  initiativeMeta?: InitiativeRollMeta | null;
+  ownerId: string | null;
+  characterSheetId: string | null;
+  hpCurrent: number;
+  hpMax: number;
+  ac: number;
+  speed: number;
+  isActive: boolean;
+  imageUrl?: string | null;
+  avatarKey?: string | null;
+}
+
+export interface PredefinedAvatar {
+  key: string;
+  name: string;
+  category: "class" | "monster" | "role";
+  url: string;
+}
+
+export interface CombatTimer {
+  id: string;
+  name: string;
+  category: "spell" | "light" | "dying" | "custom";
+  scope: "personal" | "gm";
+  entityId: string | null;
+  entityName?: string | null;
+  remainingRounds: number;
+  initialRounds: number;
+  expired: boolean;
 }
 
 export interface CombatState {
@@ -433,9 +561,17 @@ export interface CombatState {
   mapId: string;
   active: boolean;
   round: number;
+  roundNumber?: number;
   turnIndex: number;
   activeTokenId: string | null;
+  activeTurnEntityId?: string | null;
   turnOrder: string[];
+  turnQueue?: TurnQueueEntry[];
+  timers?: CombatTimer[];
+  chaosMode?: boolean;
+  groupMonsterInitiative?: boolean;
+  isSurpriseRound?: boolean;
+  freeformMode?: boolean;
 }
 
 export interface SessionMap {
@@ -443,11 +579,21 @@ export interface SessionMap {
   sessionId: string;
   name: string;
   theme: "stone-dungeon" | "forest-clearing" | "tavern-cellar" | string;
+  imageUrl?: string | null;
+  presetKey?: string | null;
   width: number;
   height: number;
   allowPlayerMovement: boolean;
   tokens: MapToken[];
   combat: CombatState | null;
+}
+
+export interface MapPreset {
+  key: string;
+  name: string;
+  category: "dungeon" | "wilderness" | "settlement";
+  url: string;
+  description: string;
 }
 
 export interface CombatAttackResult {
@@ -472,9 +618,21 @@ export function listSessionMaps(sessionId: string): Promise<{ maps: SessionMap[]
   return request("GET", `/sessions/${sessionId}/maps`);
 }
 
+export function listMapPresets(): Promise<{ presets: MapPreset[] }> {
+  return request("GET", "/maps/presets");
+}
+
 export function createSessionMap(
   sessionId: string,
-  input: { name?: string; theme?: string; width?: number; height?: number; allowPlayerMovement?: boolean },
+  input: {
+    name?: string;
+    theme?: string;
+    imageUrl?: string | null;
+    presetKey?: string | null;
+    width?: number;
+    height?: number;
+    allowPlayerMovement?: boolean;
+  },
 ): Promise<{ map: SessionMap }> {
   return request("POST", `/sessions/${sessionId}/maps`, input);
 }
@@ -485,7 +643,15 @@ export function getMap(mapId: string): Promise<{ map: SessionMap }> {
 
 export function updateMap(
   mapId: string,
-  input: { name?: string; theme?: string; width?: number; height?: number; allowPlayerMovement?: boolean },
+  input: {
+    name?: string;
+    theme?: string;
+    imageUrl?: string | null;
+    presetKey?: string | null;
+    width?: number;
+    height?: number;
+    allowPlayerMovement?: boolean;
+  },
 ): Promise<{ map: SessionMap }> {
   return request("PATCH", `/maps/${mapId}`, input);
 }
@@ -495,6 +661,10 @@ export function placeToken(
   input: Partial<MapToken>,
 ): Promise<{ token: MapToken }> {
   return request("POST", `/maps/${mapId}/tokens`, input);
+}
+
+export function listTokenAvatars(): Promise<{ avatars: PredefinedAvatar[] }> {
+  return request("GET", "/tokens/avatars");
 }
 
 export function updateToken(
@@ -508,12 +678,78 @@ export function deleteToken(tokenId: string): Promise<void> {
   return request("DELETE", `/tokens/${tokenId}`);
 }
 
-export function startCombat(mapId: string): Promise<{ combat: CombatState; tokens: MapToken[] }> {
-  return request("POST", `/maps/${mapId}/combat/start`);
+export function startCombat(
+  mapId: string,
+  options?: { chaosMode?: boolean; groupMonsterInitiative?: boolean },
+): Promise<{ combat: CombatState; tokens: MapToken[] }> {
+  return request("POST", `/maps/${mapId}/combat/start`, options ?? {});
+}
+
+export function rollCombatInitiative(
+  mapId: string,
+  input?: { tokenId?: string; forcedRolls?: number[] },
+): Promise<{ combat: CombatState; tokens: MapToken[] }> {
+  return request("POST", `/maps/${mapId}/combat/initiative/roll`, input ?? {});
+}
+
+export function setCombatInitiative(
+  mapId: string,
+  input: { tokenId: string; initiative: number },
+): Promise<{ combat: CombatState; tokens: MapToken[]; token: MapToken }> {
+  return request("PATCH", `/maps/${mapId}/combat/initiative`, input);
+}
+
+export function toggleTokenSurprise(
+  mapId: string,
+  input: { tokenId: string; hasSurprise?: boolean },
+): Promise<{ combat: CombatState; tokens: MapToken[]; token: MapToken }> {
+  return request("POST", `/maps/${mapId}/combat/surprise`, input);
+}
+
+export function updateCombatSettings(
+  mapId: string,
+  input: { chaosMode?: boolean; groupMonsterInitiative?: boolean; freeformMode?: boolean },
+): Promise<{ combat: CombatState; tokens: MapToken[] }> {
+  return request("PATCH", `/maps/${mapId}/combat/settings`, input);
+}
+
+export function reorderCombatTurnQueue(
+  mapId: string,
+  input: { orderedTokenIds?: string[]; tokenId?: string; direction?: "up" | "down" },
+): Promise<{ combat: CombatState; tokens: MapToken[] }> {
+  return request("POST", `/maps/${mapId}/combat/reorder`, input);
 }
 
 export function nextCombatTurn(mapId: string): Promise<{ combat: CombatState }> {
   return request("POST", `/maps/${mapId}/combat/next`);
+}
+
+export function endPlayerCombatTurn(mapId: string): Promise<{ combat: CombatState }> {
+  return request("POST", `/maps/${mapId}/combat/end-turn`);
+}
+
+export function previousCombatTurn(mapId: string): Promise<{ combat: CombatState }> {
+  return request("POST", `/maps/${mapId}/combat/prev`);
+}
+
+export function addCombatTimer(
+  mapId: string,
+  input: {
+    name: string;
+    category?: "spell" | "light" | "dying" | "custom";
+    scope?: "personal" | "gm";
+    entityId?: string | null;
+    durationRounds: number;
+  },
+): Promise<{ combat: CombatState }> {
+  return request("POST", `/maps/${mapId}/combat/timers`, input);
+}
+
+export function removeCombatTimer(
+  mapId: string,
+  timerId: string,
+): Promise<{ combat: CombatState }> {
+  return request("DELETE", `/maps/${mapId}/combat/timers/${timerId}`);
 }
 
 export function executeCombatAttack(
@@ -581,6 +817,81 @@ export function updateUserPreferences(preferences: {
 }): Promise<{ preferences: { preferredTheme: string; preferredLocale: string } }> {
   return request("PATCH", "/users/me/preferences", preferences);
 }
+
+export interface MonsterAttack {
+  name: string;
+  count?: number;
+  bonus: number;
+  damage: string;
+  range?: "Close" | "Near" | "Far";
+  notes?: string;
+}
+
+export interface MonsterSummary {
+  id: string;
+  name: string;
+  level: number;
+  alignment: "Lawful" | "Neutral" | "Chaotic";
+  ac: number;
+  hp: number;
+  movement: string;
+  attacks: MonsterAttack[];
+  modifiers: { str: number; dex: number; con: number; int: number; wis: number; cha: number };
+  darkAdapted: boolean;
+  features: string[];
+}
+
+export interface GeneratedMonster {
+  name: string;
+  level: number;
+  ac: number;
+  hp: number;
+  attackBonus: number;
+  damageFormula: string;
+  attacksCount: number;
+  movement: string;
+  quality: string;
+  strength: string;
+  weakness: string;
+  mutations: string[];
+  treasureLevelAdjustment: number;
+  alignment: "Lawful" | "Neutral" | "Chaotic";
+  dexModifier: number;
+  darkAdapted: boolean;
+}
+
+export function listMonsters(params?: {
+  search?: string;
+  level?: number;
+  alignment?: string;
+}): Promise<{ monsters: MonsterSummary[] }> {
+  const query = new URLSearchParams();
+  if (params?.search) query.set("search", params.search);
+  if (params?.level !== undefined) query.set("level", String(params.level));
+  if (params?.alignment) query.set("alignment", params.alignment);
+  const qStr = query.toString();
+  return request("GET", `/monsters${qStr ? `?${qStr}` : ""}`);
+}
+
+export function getMonster(id: string): Promise<{ monster: MonsterSummary }> {
+  return request("GET", `/monsters/${id}`);
+}
+
+export function getMonsterRoles(): Promise<{ roles: Record<string, any> }> {
+  return request("GET", "/monsters/roles");
+}
+
+export function generateMonster(params: {
+  partyLevel: number;
+  rollCombat?: number;
+  rollQuality?: number;
+  rollStrength?: number;
+  rollWeakness?: number;
+  mutationRolls?: Array<{ table: 1 | 2 | 3; roll: number }>;
+}): Promise<{ monster: GeneratedMonster }> {
+  return request("POST", "/monsters/generate", params);
+}
+
 
 
 

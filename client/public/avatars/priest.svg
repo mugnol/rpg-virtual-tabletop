@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="100" height="100">
+  <defs>
+    <radialGradient id="priestBg" cx="50%" cy="40%" r="55%">
+      <stop offset="0%" stop-color="#d97706"/>
+      <stop offset="100%" stop-color="#451a03"/>
+    </radialGradient>
+  </defs>
+  <circle cx="50" cy="50" r="48" fill="url(#priestBg)" stroke="#fde68a" stroke-width="3"/>
+  <!-- Radiant Sun / Holy Cross -->
+  <g fill="#fef3c7" stroke="#fbbf24" stroke-width="1.5">
+    <circle cx="50" cy="50" r="14"/>
+    <path d="M50 18 L53 30 L50 28 L47 30 Z"/>
+    <path d="M50 82 L53 70 L50 72 L47 70 Z"/>
+    <path d="M18 50 L30 53 L28 50 L30 47 Z"/>
+    <path d="M82 50 L70 53 L72 50 L70 47 Z"/>
+    <path d="M28 28 L38 36 L36 34 L34 36 Z"/>
+    <path d="M72 72 L62 64 L64 66 L66 64 Z"/>
+    <path d="M72 28 L64 36 L66 34 L64 36 Z"/>
+    <path d="M28 72 L36 64 L34 66 L36 64 Z"/>
+  </g>
+  <circle cx="50" cy="50" r="7" fill="#ffffff" stroke="none"/>
+  <circle cx="50" cy="50" r="47" fill="none" stroke="#261005" stroke-width="1.5" opacity="0.6"/>
+</svg>

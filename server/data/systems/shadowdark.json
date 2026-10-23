@@ -33,7 +33,7 @@
       "hitDie": 6,
       "spellcasting": {
         "ability": "wis",
-        "knownByLevel": [2, 3, 4, 5, 6, 7, 8, 9, 10, 10]
+        "knownByLevel": [2, 3, 4, 5, 6, 7, 9, 10, 11, 13]
       }
     },
     { "key": "thief", "name": "Thief", "hitDie": 4 },
@@ -43,7 +43,7 @@
       "hitDie": 4,
       "spellcasting": {
         "ability": "int",
-        "knownByLevel": [3, 4, 5, 6, 7, 8, 9, 10, 11, 12]
+        "knownByLevel": [3, 4, 5, 6, 7, 9, 10, 12, 14, 16]
       }
     }
   ],
@@ -82,7 +82,7 @@
     { "key": "chainmail", "name": "Chainmail", "base": 13, "dex": "full", "slots": 2 },
     { "key": "plate", "name": "Plate", "base": 15, "dex": "none", "slots": 3 },
     { "key": "mithral-chain", "name": "Mithral Chainmail", "base": 13, "dex": "full", "slots": 1 },
-    { "key": "mithral-plate", "name": "Mithral Plate", "base": 15, "dex": "none", "slots": 1 }
+    { "key": "mithral-plate", "name": "Mithral Plate", "base": 15, "dex": "none", "slots": 2 }
   ],
   "shield": { "bonus": 2 },
   "derived": {

@@ -422,3 +422,145 @@ describe("DELETE /api/sheets/:id (UC-24)", () => {
     expect(list.body.sheets).toEqual([]);
   });
 });
+
+describe("Shadowdark RPG Completeness & Shadowdarklings Parity (UC-26..UC-28)", () => {
+  it("supports Level 0 (Gauntlet) character creation and graduation to Level 1 on levelup", async () => {
+    const { player, campaignId } = await setup();
+    const res = await player.post(`/api/campaigns/${campaignId}/sheets`).send({
+      kind: "PC",
+      name: "Peasant Pip",
+      level: 0,
+      ancestryId: "halfling",
+      backgroundId: "urchin",
+      abilities: { str: 10, int: 10, dex: 14, wis: 10, con: 14, cha: 10 },
+      extras: { alignment: "Neutral" },
+    });
+    expect(res.status).toBe(201);
+    expect(res.body.sheet.level).toBe(0);
+    expect(res.body.sheet.hpMax).toBe(2); // CON 14 -> +2
+
+    const grad = await player.post(`/api/sheets/${res.body.sheet.id}/levelup`).send({
+      classId: "thief",
+    });
+    expect(grad.status).toBe(200);
+    expect(grad.body.sheet.level).toBe(1);
+    expect(grad.body.sheet.classId).toBe("thief");
+    expect(grad.body.sheet.hpMax).toBeGreaterThanOrEqual(3);
+  });
+
+  it("generates random 0-level and 1st-level Shadowdark characters (POST /api/campaigns/:id/sheets/generate)", async () => {
+    const { player, campaignId } = await setup();
+    const lv0 = await player
+      .post(`/api/campaigns/${campaignId}/sheets/generate`)
+      .send({ level: 0 });
+    expect(lv0.status).toBe(201);
+    expect(lv0.body.sheet.level).toBe(0);
+    expect(lv0.body.sheet.ancestryId).toBeTruthy();
+    expect(lv0.body.sheet.backgroundId).toBeTruthy();
+
+    const lv1 = await player
+      .post(`/api/campaigns/${campaignId}/sheets/generate`)
+      .send({ level: 1, name: "Creeg" });
+    expect(lv1.status).toBe(201);
+    expect(lv1.body.sheet.level).toBe(1);
+    expect(lv1.body.sheet.name).toBe("Creeg");
+    expect(lv1.body.sheet.classId).toBeTruthy();
+    expect(lv1.body.sheet.derived.shadowdark).toBeDefined();
+    expect(lv1.body.sheet.derived.shadowdark.title).toBeTruthy();
+  });
+
+  it("exports and imports Shadowdarklings JSON bidirectionally", async () => {
+    const { player, campaignId } = await setup();
+    const created = await player.post(`/api/campaigns/${campaignId}/sheets`).send({
+      kind: "PC",
+      name: "Jorbin",
+      ancestryId: "dwarf",
+      classId: "fighter",
+      backgroundId: "soldier",
+      armorId: "chainmail",
+      shield: true,
+      abilities: { str: 16, int: 8, dex: 9, wis: 11, con: 14, cha: 10 },
+      extras: {
+        alignment: "Lawful",
+        deity: "Saint Terragnis",
+        talents: ["Weapon Mastery (greataxe)"],
+        weapons: ["greataxe"],
+        weaponMastery: ["greataxe"],
+        coins: { gp: 15, sp: 5, cp: 0 },
+      },
+    });
+    expect(created.status).toBe(201);
+
+    const exportedRes = await player.get(
+      `/api/sheets/${created.body.sheet.id}/shadowdarklings`,
+    );
+    expect(exportedRes.status).toBe(200);
+    const sdJson = exportedRes.body.character;
+    expect(sdJson.name).toBe("Jorbin");
+    expect(sdJson.ancestry).toBe("Dwarf");
+    expect(sdJson.class).toBe("Fighter");
+    expect(sdJson.alignment).toBe("Lawful");
+    expect(sdJson.deity).toBe("Saint Terragnis");
+    expect(sdJson.title).toBe("Squire");
+    expect(sdJson.stats.STR).toBe(16);
+
+    const importedRes = await player
+      .post(`/api/campaigns/${campaignId}/sheets/shadowdarklings`)
+      .send({ ...sdJson, name: "Jorbin Clone" });
+    expect(importedRes.status).toBe(201);
+    expect(importedRes.body.sheet.name).toBe("Jorbin Clone");
+    expect(importedRes.body.sheet.ancestryId).toBe("dwarf");
+    expect(importedRes.body.sheet.classId).toBe("fighter");
+    expect(importedRes.body.sheet.abilities.str.score).toBe(16);
+  });
+
+  it("executes Shadowdark sheet actions (cast_spell, rest, carouse)", async () => {
+    const { player, campaignId } = await setup();
+    const created = await player.post(`/api/campaigns/${campaignId}/sheets`).send({
+      kind: "PC",
+      name: "Iraga",
+      ancestryId: "half-orc",
+      classId: "priest",
+      backgroundId: "acolyte",
+      abilities: { str: 14, int: 10, dex: 10, wis: 16, con: 12, cha: 10 },
+      hpMax: 8,
+      hpCurrent: 3,
+      extras: {
+        alignment: "Lawful",
+        deity: "Saint Terragnis",
+        spells: ["cure-wounds", "light"],
+        coins: { gp: 100, sp: 0, cp: 0 },
+      },
+    });
+    const sheetId = created.body.sheet.id;
+
+    // Failed spell cast marks spell as lost until rest
+    const castFail = await player.post(`/api/sheets/${sheetId}/shadowdark-action`).send({
+      action: "cast_spell",
+      spellKey: "light",
+      forcedD20: 2, // 2 + 3 = 5 < DC 11
+    });
+    expect(castFail.status).toBe(200);
+    expect(castFail.body.result.success).toBe(false);
+    expect(castFail.body.sheet.extras.lostSpells).toContain("light");
+
+    // Rest restores full HP and clears lostSpells
+    const restRes = await player.post(`/api/sheets/${sheetId}/shadowdark-action`).send({
+      action: "rest",
+    });
+    expect(restRes.status).toBe(200);
+    expect(restRes.body.sheet.hpCurrent).toBe(8);
+    expect(restRes.body.sheet.extras.lostSpells).toEqual([]);
+
+    // Carouse awards XP and deducts event cost
+    const carouseRes = await player.post(`/api/sheets/${sheetId}/shadowdark-action`).send({
+      action: "carouse",
+      eventCostGp: 30,
+      forcedD8: 8,
+    });
+    expect(carouseRes.status).toBe(200);
+    expect(carouseRes.body.result.xpGained).toBe(4);
+    expect(carouseRes.body.sheet.xp).toBe(4);
+    expect(carouseRes.body.sheet.extras.coins.gp).toBe(70);
+  });
+});

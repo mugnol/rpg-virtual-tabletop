@@ -93,3 +93,22 @@ GM creates an NPC and player cannot edit or delete it
     TestID Should Not Be Visible    sheet-edit-button
     TestID Should Not Be Visible    level-up-button
     TestID Should Not Be Visible    sheet-delete-button
+
+Player generates random Shadowdark character and imports/exports Shadowdarklings JSON
+    Register Via UI    sd-full-gm-${TS}@e2e.test    gm    Shadowdark Master
+    Create System Campaign Via UI    The Lost Citadel    shadowdark
+    TestID Should Be Visible    generate-random-character-button
+    Click TestID    generate-random-character-button
+    TestID Should Be Visible    page-sheet
+    TestID Should Be Visible    sheet-title
+    TestID Should Be Visible    sheet-alignment
+    TestID Should Be Visible    export-shadowdarklings-button
+    Go To    ${HOME}
+    Click Campaign Named    The Lost Citadel
+    Click TestID    import-shadowdarklings-toggle
+    Fill TestID    import-shadowdarklings-input    {"name":"Ralina","ancestry":"Halfling","class":"Thief","level":1,"alignment":"Neutral","background":"Urchin","deity":"Gede","title":"Robber","stats":{"STR":8,"DEX":16,"CON":12,"INT":11,"WIS":10,"CHA":14},"maxHitPoints":5,"armorClass":14,"gear":[{"name":"Leather armor","type":"armor","quantity":1,"slots":1},{"name":"Dagger","type":"weapon","quantity":1,"slots":1}],"gold":15,"silver":0,"copper":0,"talents":[{"name":"Backstab deals +1 dice of damage","source":"Class","gainedAtLevel":1}],"languages":"Common"}
+    Click TestID    import-shadowdarklings-submit
+    TestID Should Be Visible    page-sheet
+    TestID Text Should Be    sheet-name    Ralina
+    TestID Text Should Be    sheet-title    Robber
+    TestID Text Should Be    sheet-alignment    Neutral

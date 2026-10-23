@@ -284,4 +284,592 @@ describe("Tactical Maps & Combat Integration (BR-35..BR-50)", () => {
     expect(endRes.status).toBe(200);
     expect(endRes.body.combat.active).toBe(false);
   });
+
+  it("synchronizes campaign turn queue, activeTurnEntityId, roundNumber, player End Turn, GM Previous Turn, round timer countdowns, and turn validation", async () => {
+    seq += 1;
+    const gmAgent = await registerAgent(`tq-gm-${seq}@test.dev`, "GM", "TurnQueue GM");
+    const playerAgent = await registerAgent(`tq-p-${seq}@test.dev`, "PLAYER", "TurnQueue Player");
+    const campaignId = (await createSystemCampaign(gmAgent, `TurnQueue Camp ${seq}`, "shadowdark")).id;
+    await joinPlayer(gmAgent, playerAgent, campaignId);
+
+    const sheet = await createPc(playerAgent, campaignId, "Kaelen");
+    const sheetId = sheet.id as string;
+
+    const sessionId = (
+      await gmAgent.post(`/api/campaigns/${campaignId}/sessions`).send({ name: "TurnQueue Session" })
+    ).body.session.id;
+
+    const mapId = (
+      await gmAgent.post(`/api/sessions/${sessionId}/maps`).send({
+        name: "TurnQueue Map",
+        width: 12,
+        height: 12,
+        allowPlayerMovement: true,
+      })
+    ).body.map.id;
+
+    const playerTokenId = (
+      await gmAgent.post(`/api/maps/${mapId}/tokens`).send({
+        type: "CHARACTER",
+        characterSheetId: sheetId,
+        x: 2,
+        y: 2,
+        attackBonus: 4,
+        damageFormula: "1d8+2",
+      })
+    ).body.token.id;
+
+    const monsterTokenId = (
+      await gmAgent.post(`/api/maps/${mapId}/tokens`).send({
+        type: "MONSTER",
+        name: "Hobgoblin",
+        x: 6,
+        y: 2,
+        hpMax: 18,
+        hpCurrent: 18,
+        ac: 13,
+        attackBonus: 3,
+        damageFormula: "1d8+1",
+      })
+    ).body.token.id;
+
+    // 1. GM starts combat -> turnQueue has character and monster, roundNumber = 1, activeTurnEntityId = playerTokenId
+    const startRes = await gmAgent.post(`/api/maps/${mapId}/combat/start`).send({});
+    expect(startRes.status).toBe(200);
+    expect(startRes.body.combat.active).toBe(true);
+    expect(startRes.body.combat.roundNumber).toBe(1);
+    expect(startRes.body.combat.activeTurnEntityId).toBe(playerTokenId);
+    expect(Array.isArray(startRes.body.combat.turnQueue)).toBe(true);
+    expect(startRes.body.combat.turnQueue).toHaveLength(2);
+    expect(startRes.body.combat.turnQueue[0]).toMatchObject({
+      entityId: playerTokenId,
+      entityType: "character",
+      name: "Kaelen",
+      isActive: true,
+    });
+    expect(startRes.body.combat.turnQueue[1]).toMatchObject({
+      entityId: monsterTokenId,
+      entityType: "monster",
+      name: "Hobgoblin",
+      isActive: false,
+    });
+
+    // 2. Add personal and GM round timers (light timer & spell duration)
+    const lightTimerRes = await playerAgent.post(`/api/maps/${mapId}/combat/timers`).send({
+      name: "Torch Light",
+      category: "light",
+      scope: "personal",
+      entityId: playerTokenId,
+      durationRounds: 3,
+    });
+    expect(lightTimerRes.status).toBe(201);
+    expect(lightTimerRes.body.combat.timers).toHaveLength(1);
+    expect(lightTimerRes.body.combat.timers[0]).toMatchObject({
+      name: "Torch Light",
+      category: "light",
+      scope: "personal",
+      remainingRounds: 3,
+      expired: false,
+    });
+
+    const spellTimerRes = await gmAgent.post(`/api/maps/${mapId}/combat/timers`).send({
+      name: "Protection from Evil",
+      category: "spell",
+      scope: "gm",
+      durationRounds: 1,
+    });
+    expect(spellTimerRes.status).toBe(201);
+    expect(spellTimerRes.body.combat.timers).toHaveLength(2);
+
+    // 3. Active player moves on their own turn and then clicks End Turn
+    const validMoveRes = await playerAgent.patch(`/api/tokens/${playerTokenId}`).send({ x: 3, y: 2 });
+    expect(validMoveRes.status).toBe(200);
+
+    const endTurnRes = await playerAgent.post(`/api/maps/${mapId}/combat/end-turn`).send({});
+    expect(endTurnRes.status).toBe(200);
+    expect(endTurnRes.body.combat.turnIndex).toBe(1);
+    expect(endTurnRes.body.combat.activeTurnEntityId).toBe(monsterTokenId);
+    expect(endTurnRes.body.combat.roundNumber).toBe(1);
+
+    // 4. Turn validation: Player cannot move, attack, end turn, or revert turn on the Monster's turn
+    const outOfTurnMove = await playerAgent.patch(`/api/tokens/${playerTokenId}`).send({ x: 4, y: 2 });
+    expect(outOfTurnMove.status).toBe(403);
+    expect(outOfTurnMove.body.error.code).toBe("NOT_YOUR_TURN");
+
+    const outOfTurnAttack = await playerAgent.post(`/api/maps/${mapId}/combat/attack`).send({
+      attackerId: playerTokenId,
+      targetId: monsterTokenId,
+    });
+    expect(outOfTurnAttack.status).toBe(403);
+    expect(outOfTurnAttack.body.error.code).toBe("NOT_YOUR_TURN");
+
+    const outOfTurnEnd = await playerAgent.post(`/api/maps/${mapId}/combat/end-turn`).send({});
+    expect(outOfTurnEnd.status).toBe(403);
+    expect(outOfTurnEnd.body.error.code).toBe("NOT_YOUR_TURN");
+
+    const playerPrevAttempt = await playerAgent.post(`/api/maps/${mapId}/combat/prev`).send({});
+    expect(playerPrevAttempt.status).toBe(403);
+
+    // 5. GM advances turn from last participant -> completes full queue cycle -> roundNumber increments to 2 & timers tick down
+    const wrapNextRes = await gmAgent.post(`/api/maps/${mapId}/combat/next`).send({});
+    expect(wrapNextRes.status).toBe(200);
+    expect(wrapNextRes.body.combat.turnIndex).toBe(0);
+    expect(wrapNextRes.body.combat.roundNumber).toBe(2);
+    expect(wrapNextRes.body.combat.activeTurnEntityId).toBe(playerTokenId);
+    expect(wrapNextRes.body.combat.timers[0].remainingRounds).toBe(2);
+    expect(wrapNextRes.body.combat.timers[0].expired).toBe(false);
+    expect(wrapNextRes.body.combat.timers[1].remainingRounds).toBe(0);
+    expect(wrapNextRes.body.combat.timers[1].expired).toBe(true);
+
+    // 6. GM reverts to previous turn -> wraps back to Round 1, last participant, and restores timer countdowns
+    const prevRes = await gmAgent.post(`/api/maps/${mapId}/combat/prev`).send({});
+    expect(prevRes.status).toBe(200);
+    expect(prevRes.body.combat.turnIndex).toBe(1);
+    expect(prevRes.body.combat.roundNumber).toBe(1);
+    expect(prevRes.body.combat.activeTurnEntityId).toBe(monsterTokenId);
+    expect(prevRes.body.combat.timers[0].remainingRounds).toBe(3);
+    expect(prevRes.body.combat.timers[1].remainingRounds).toBe(1);
+    expect(prevRes.body.combat.timers[1].expired).toBe(false);
+  });
+
+  it("supports Shadowdark initiative rolls, Thief 2d20kh1 advantage, Surprise turns, Grouped Monster Initiative, Chaos Mode re-rolls, manual overrides, and chat broadcasts", async () => {
+    seq += 1;
+    const gmAgent = await registerAgent(`init-gm-${seq}@test.dev`, "GM", "Init GM");
+    const playerAgent = await registerAgent(`init-p-${seq}@test.dev`, "PLAYER", "Init Player");
+    const campaignId = (await createSystemCampaign(gmAgent, `Init Camp ${seq}`, "shadowdark")).id;
+    await joinPlayer(gmAgent, playerAgent, campaignId);
+
+    // Thief with DEX 16 (+3) and "Gain advantage on initiative rolls" talent
+    const thiefSheet = await createPc(playerAgent, campaignId, "Vex the Thief", {
+      classId: "thief",
+      abilities: { str: 10, int: 10, dex: 16, wis: 10, con: 12, cha: 10 },
+      extras: { talents: ["Gain advantage on initiative rolls"] },
+    });
+    const thiefSheetId = thiefSheet.id as string;
+
+    const sessionId = (
+      await gmAgent.post(`/api/campaigns/${campaignId}/sessions`).send({ name: "Initiative Session" })
+    ).body.session.id;
+
+    const mapId = (
+      await gmAgent.post(`/api/sessions/${sessionId}/maps`).send({
+        name: "Ambush Cavern",
+        width: 12,
+        height: 12,
+      })
+    ).body.map.id;
+
+    // Place Thief character token
+    const thiefTokenRes = await gmAgent.post(`/api/maps/${mapId}/tokens`).send({
+      type: "CHARACTER",
+      characterSheetId: thiefSheetId,
+      x: 2,
+      y: 2,
+    });
+    expect(thiefTokenRes.status).toBe(201);
+    const thiefTokenId = thiefTokenRes.body.token.id as string;
+    expect(thiefTokenRes.body.token.dexModifier).toBe(3);
+
+    // Place 2 Monster tokens with different DEX modifiers
+    const scoutTokenId = (
+      await gmAgent.post(`/api/maps/${mapId}/tokens`).send({
+        type: "MONSTER",
+        name: "Goblin Scout",
+        dexModifier: 2,
+        x: 5,
+        y: 2,
+      })
+    ).body.token.id as string;
+
+    const bruteTokenId = (
+      await gmAgent.post(`/api/maps/${mapId}/tokens`).send({
+        type: "MONSTER",
+        name: "Goblin Brute",
+        dexModifier: -1,
+        x: 6,
+        y: 2,
+      })
+    ).body.token.id as string;
+
+    // 1. Flag Goblin Scout with hasSurprise: true before combat starts
+    const surpriseRes = await gmAgent.post(`/api/maps/${mapId}/combat/surprise`).send({
+      tokenId: scoutTokenId,
+      hasSurprise: true,
+    });
+    expect(surpriseRes.status).toBe(200);
+    expect(surpriseRes.body.token.hasSurprise).toBe(true);
+
+    // 2. Start combat with groupMonsterInitiative: true
+    // Thief rolls [4, 17] -> 2d20kh1 + 3 = 20
+    // Grouped monsters share forcedGroupMonsterRoll: 8 + max(2, -1) = 10
+    // Goblin Scout has hasSurprise: true -> goes first in Surprise Round!
+    const startRes = await gmAgent.post(`/api/maps/${mapId}/combat/start`).send({
+      groupMonsterInitiative: true,
+      chaosMode: false,
+      forcedRollsById: {
+        [thiefTokenId]: [4, 17],
+      },
+      forcedGroupMonsterRoll: 8,
+    });
+    expect(startRes.status).toBe(200);
+    expect(startRes.body.combat.active).toBe(true);
+    expect(startRes.body.combat.groupMonsterInitiative).toBe(true);
+    expect(startRes.body.combat.isSurpriseRound).toBe(true);
+    expect(startRes.body.combat.turnQueue).toHaveLength(3);
+
+    // Order during surprise round: Goblin Scout (surprise, init 10) -> Vex the Thief (init 20, 2d20kh1) -> Goblin Brute (init 10)
+    expect(startRes.body.combat.turnQueue[0]).toMatchObject({
+      entityId: scoutTokenId,
+      name: "Goblin Scout",
+      initiative: 10,
+      hasSurprise: true,
+    });
+    expect(startRes.body.combat.turnQueue[1]).toMatchObject({
+      entityId: thiefTokenId,
+      name: "Vex the Thief",
+      initiative: 20,
+      dexModifier: 3,
+      hasInitiativeAdvantage: true,
+    });
+    expect(startRes.body.combat.turnQueue[1].initiativeMeta.dice).toEqual([4, 17]);
+    expect(startRes.body.combat.turnQueue[1].initiativeMeta.keptDie).toBe(17);
+    expect(startRes.body.combat.turnQueue[2]).toMatchObject({
+      entityId: bruteTokenId,
+      name: "Goblin Brute",
+      initiative: 10,
+      hasSurprise: false,
+    });
+
+    // 3. Player rolls initiative for their own Thief character into the queue & logs to session chat
+    const playerRollRes = await playerAgent.post(`/api/maps/${mapId}/combat/initiative/roll`).send({
+      tokenId: thiefTokenId,
+      forcedRolls: [9, 19], // 19 + 3 = 22
+    });
+    expect(playerRollRes.status).toBe(200);
+    const updatedThiefEntry = playerRollRes.body.combat.turnQueue.find(
+      (e: { entityId: string }) => e.entityId === thiefTokenId,
+    );
+    expect(updatedThiefEntry.initiative).toBe(22);
+    expect(updatedThiefEntry.initiativeMeta.dice).toEqual([9, 19]);
+
+    const chatRes = await gmAgent.get(`/api/sessions/${sessionId}/messages`);
+    expect(chatRes.status).toBe(200);
+    expect(
+      chatRes.body.messages.some(
+        (m: { content: string }) => m.content.includes("Vex the Thief") && m.content.includes("Initiative"),
+      ),
+    ).toBe(true);
+
+    // 4. GM manually overrides Goblin Brute's initiative to 25
+    const overrideRes = await gmAgent.patch(`/api/maps/${mapId}/combat/initiative`).send({
+      tokenId: bruteTokenId,
+      initiative: 25,
+    });
+    expect(overrideRes.status).toBe(200);
+    const bruteEntry = overrideRes.body.combat.turnQueue.find(
+      (e: { entityId: string }) => e.entityId === bruteTokenId,
+    );
+    expect(bruteEntry.initiative).toBe(25);
+
+    // 5. Late-joining monster spawned during active combat automatically joins turnQueue
+    const lateMonsterRes = await gmAgent.post(`/api/maps/${mapId}/tokens`).send({
+      type: "MONSTER",
+      name: "Cave Spider",
+      dexModifier: 3,
+      initiative: 18,
+      x: 8,
+      y: 8,
+    });
+    expect(lateMonsterRes.status).toBe(201);
+    const mapAfterSpawn = await gmAgent.get(`/api/maps/${mapId}`);
+    expect(mapAfterSpawn.body.map.combat.turnQueue).toHaveLength(4);
+
+    // 6. Enable Chaos Mode and complete the round wrap -> clears surprise round & automatically re-rolls and re-sorts queue
+    const settingsRes = await gmAgent.patch(`/api/maps/${mapId}/combat/settings`).send({
+      chaosMode: true,
+      groupMonsterInitiative: false,
+    });
+    expect(settingsRes.status).toBe(200);
+    expect(settingsRes.body.combat.chaosMode).toBe(true);
+    expect(settingsRes.body.combat.groupMonsterInitiative).toBe(false);
+
+    // Advance 4 times to complete the 4-participant round
+    await gmAgent.post(`/api/maps/${mapId}/combat/next`).send({});
+    await gmAgent.post(`/api/maps/${mapId}/combat/next`).send({});
+    await gmAgent.post(`/api/maps/${mapId}/combat/next`).send({});
+    const round2Res = await gmAgent.post(`/api/maps/${mapId}/combat/next`).send({
+      forcedRollsById: {
+        [thiefTokenId]: [2, 5], // 5 + 3 = 8
+        [scoutTokenId]: [19], // 19 + 2 = 21
+        [bruteTokenId]: [15], // 15 - 1 = 14
+      },
+    });
+    expect(round2Res.status).toBe(200);
+    expect(round2Res.body.combat.roundNumber).toBe(2);
+    expect(round2Res.body.combat.isSurpriseRound).toBe(false);
+    // Verify queue is sorted descending by the new Round 2 initiative scores
+    const r2Queue = round2Res.body.combat.turnQueue;
+    for (let i = 0; i < r2Queue.length - 1; i++) {
+      expect(r2Queue[i].initiative).toBeGreaterThanOrEqual(r2Queue[i + 1].initiative);
+    }
+  });
+
+  it("allows GM to manually reorder turn queue, moves entry up/down, preserves activeTurnEntityId, toggles freeform mode, and rejects players", async () => {
+    seq += 1;
+    const gmAgent = await registerAgent(`reorder-gm-${seq}@test.dev`, "GM", "Reorder GM");
+    const playerAgent = await registerAgent(`reorder-p-${seq}@test.dev`, "PLAYER", "Reorder Player");
+    const campaignId = (await createSystemCampaign(gmAgent, `Reorder Camp ${seq}`, "shadowdark")).id;
+    await joinPlayer(gmAgent, playerAgent, campaignId);
+
+    const sheet = await createPc(playerAgent, campaignId, "Valeros");
+    const sheetId = sheet.id as string;
+
+    const sessionId = (
+      await gmAgent.post(`/api/campaigns/${campaignId}/sessions`).send({ name: "Reorder Session" })
+    ).body.session.id;
+
+    const mapId = (
+      await gmAgent.post(`/api/sessions/${sessionId}/maps`).send({
+        name: "Colosseum",
+        width: 12,
+        height: 12,
+      })
+    ).body.map.id;
+
+    // Tokens: A (Player), B (Orc), C (Goblin)
+    const tokenA = (
+      await gmAgent.post(`/api/maps/${mapId}/tokens`).send({
+        type: "CHARACTER",
+        characterSheetId: sheetId,
+        x: 1,
+        y: 1,
+      })
+    ).body.token.id as string;
+
+    const tokenB = (
+      await gmAgent.post(`/api/maps/${mapId}/tokens`).send({
+        type: "MONSTER",
+        name: "Orc",
+        x: 3,
+        y: 1,
+      })
+    ).body.token.id as string;
+
+    const tokenC = (
+      await gmAgent.post(`/api/maps/${mapId}/tokens`).send({
+        type: "MONSTER",
+        name: "Goblin",
+        x: 5,
+        y: 1,
+      })
+    ).body.token.id as string;
+
+    // Start combat
+    const startRes = await gmAgent.post(`/api/maps/${mapId}/combat/start`).send({});
+    expect(startRes.status).toBe(200);
+
+    // Initial order should contain tokenA, tokenB, tokenC
+    const initialTurnOrder = startRes.body.combat.turnOrder as string[];
+    expect(initialTurnOrder).toHaveLength(3);
+
+    // 1. Player attempts to reorder turn queue -> 403 Forbidden
+    const playerAttempt = await playerAgent.post(`/api/maps/${mapId}/combat/reorder`).send({
+      orderedTokenIds: [tokenC, tokenB, tokenA],
+    });
+    expect(playerAttempt.status).toBe(403);
+
+    // 2. GM moves the 2nd token up by 1 position using direction "up"
+    const secondTokenId = initialTurnOrder[1];
+    const moveUpRes = await gmAgent.post(`/api/maps/${mapId}/combat/reorder`).send({
+      tokenId: secondTokenId,
+      direction: "up",
+    });
+    expect(moveUpRes.status).toBe(200);
+    expect(moveUpRes.body.combat.turnOrder[0]).toBe(secondTokenId);
+    expect(moveUpRes.body.combat.turnOrder[1]).toBe(initialTurnOrder[0]);
+    // activeTurnEntityId should be preserved
+    expect(moveUpRes.body.combat.activeTurnEntityId).toBe(startRes.body.combat.activeTurnEntityId);
+    expect(moveUpRes.body.combat.turnIndex).toBe(
+      moveUpRes.body.combat.turnOrder.indexOf(startRes.body.combat.activeTurnEntityId),
+    );
+
+    // 3. GM submits custom sequence [tokenC, tokenA, tokenB]
+    const customReorderRes = await gmAgent.post(`/api/maps/${mapId}/combat/reorder`).send({
+      orderedTokenIds: [tokenC, tokenA, tokenB],
+    });
+    expect(customReorderRes.status).toBe(200);
+    expect(customReorderRes.body.combat.turnOrder).toEqual([tokenC, tokenA, tokenB]);
+    expect(customReorderRes.body.combat.activeTurnEntityId).toBe(startRes.body.combat.activeTurnEntityId);
+
+    // 4. GM toggles freeformMode to true
+    const freeformRes = await gmAgent.patch(`/api/maps/${mapId}/combat/settings`).send({
+      freeformMode: true,
+    });
+    expect(freeformRes.status).toBe(200);
+    expect(freeformRes.body.combat.freeformMode).toBe(true);
+
+    // Player attempts to toggle freeformMode -> 403 Forbidden
+    const playerSettingsAttempt = await playerAgent.patch(`/api/maps/${mapId}/combat/settings`).send({
+      freeformMode: false,
+    });
+    expect(playerSettingsAttempt.status).toBe(403);
+  });
+
+  it("provides predefined avatars library and auto-assigns / updates token avatars (BR-39, UC-39)", async () => {
+    seq += 1;
+    const gmAgent = await registerAgent(`avatar-gm-${seq}@test.dev`, "GM", "Avatar GM");
+    const playerAgent = await registerAgent(`avatar-p-${seq}@test.dev`, "PLAYER", "Avatar Player");
+    const campaignId = (await createSystemCampaign(gmAgent, `Avatar Camp ${seq}`, "shadowdark")).id;
+    await joinPlayer(gmAgent, playerAgent, campaignId);
+
+    // 1. GET /api/tokens/avatars
+    const avatarsRes = await gmAgent.get("/api/tokens/avatars");
+    expect(avatarsRes.status).toBe(200);
+    expect(Array.isArray(avatarsRes.body.avatars)).toBe(true);
+    expect(avatarsRes.body.avatars.length).toBeGreaterThanOrEqual(10);
+    const keys = avatarsRes.body.avatars.map((a: any) => a.key);
+    expect(keys).toContain("fighter");
+    expect(keys).toContain("wizard");
+    expect(keys).toContain("tank");
+
+    // Create session and map
+    const sessionRes = await gmAgent.post(`/api/campaigns/${campaignId}/sessions`).send({
+      name: "Avatar Session",
+    });
+    const sessionId = sessionRes.body.session.id;
+    const mapRes = await gmAgent.post(`/api/sessions/${sessionId}/maps`).send({
+      name: "Avatar Arena",
+      width: 10,
+      height: 10,
+    });
+    const mapId = mapRes.body.map.id;
+
+    // Create a Fighter PC sheet
+    const sheet = await createPc(playerAgent, campaignId, "Valerius the Bold", {
+      classId: "fighter",
+      level: 1,
+    });
+    const sheetId = sheet.id as string;
+
+    // 2. Place Character token linked to Fighter sheet without explicit avatar
+    const charTokRes = await gmAgent.post(`/api/maps/${mapId}/tokens`).send({
+      type: "CHARACTER",
+      characterSheetId: sheetId,
+      x: 1,
+      y: 1,
+    });
+    expect(charTokRes.status).toBe(201);
+    expect(charTokRes.body.token.avatarKey).toBe("fighter");
+    expect(charTokRes.body.token.imageUrl).toBe("/avatars/fighter.svg");
+
+    // 3. Place Monster token from compendium (Goblin) without explicit avatar
+    const gobTokRes = await gmAgent.post(`/api/maps/${mapId}/tokens`).send({
+      type: "MONSTER",
+      monsterKey: "goblin",
+      x: 3,
+      y: 3,
+    });
+    expect(gobTokRes.status).toBe(201);
+    expect(gobTokRes.body.token.avatarKey).toBe("goblin");
+    expect(gobTokRes.body.token.imageUrl).toBe("/avatars/goblin.svg");
+
+    // 4. Place Token with custom image URL and custom avatarKey
+    const customTokRes = await gmAgent.post(`/api/maps/${mapId}/tokens`).send({
+      type: "MONSTER",
+      name: "Custom Behemoth",
+      x: 5,
+      y: 5,
+      imageUrl: "https://example.com/behemoth.png",
+      avatarKey: "tank",
+    });
+    expect(customTokRes.status).toBe(201);
+    expect(customTokRes.body.token.avatarKey).toBe("tank");
+    expect(customTokRes.body.token.imageUrl).toBe("https://example.com/behemoth.png");
+
+    // 5. Update token avatar and image via PATCH /api/tokens/:id
+    const patchTokRes = await gmAgent.patch(`/api/tokens/${charTokRes.body.token.id}`).send({
+      avatarKey: "legendary",
+      imageUrl: "/avatars/legendary.svg",
+    });
+    expect(patchTokRes.status).toBe(200);
+    expect(patchTokRes.body.token.avatarKey).toBe("legendary");
+    expect(patchTokRes.body.token.imageUrl).toBe("/avatars/legendary.svg");
+  });
+
+  it("GM manages custom map images, built-in map presets, and dimensions; non-GM players are rejected (BR-40, UC-40, UC-41)", async () => {
+    seq += 1;
+    const gmAgent = await registerAgent(`mapimg-gm-${seq}@test.dev`, "GM", "MapImg GM");
+    const playerAgent = await registerAgent(`mapimg-p-${seq}@test.dev`, "PLAYER", "MapImg Player");
+    const campaignId = (await createSystemCampaign(gmAgent, `MapImg Camp ${seq}`, "shadowdark")).id;
+    await joinPlayer(gmAgent, playerAgent, campaignId);
+
+    // 1. GET /api/maps/presets
+    const presetsRes = await gmAgent.get("/api/maps/presets");
+    expect(presetsRes.status).toBe(200);
+    expect(Array.isArray(presetsRes.body.presets)).toBe(true);
+    expect(presetsRes.body.presets.length).toBeGreaterThanOrEqual(6);
+    const keys = presetsRes.body.presets.map((p: any) => p.key);
+    expect(keys).toContain("cave");
+    expect(keys).toContain("tomb");
+    expect(keys).toContain("deep-tunnels");
+    expect(keys).toContain("ruins");
+    expect(keys).toContain("overland-hex");
+    expect(keys).toContain("settlement");
+
+    // Create session
+    const sessionRes = await gmAgent.post(`/api/campaigns/${campaignId}/sessions`).send({
+      name: "Map Image Session",
+    });
+    const sessionId = sessionRes.body.session.id;
+
+    // 2. GM creates map with built-in preset (tomb)
+    const mapWithPresetRes = await gmAgent.post(`/api/sessions/${sessionId}/maps`).send({
+      name: "Ancient Tomb Crypt",
+      presetKey: "tomb",
+      width: 16,
+      height: 12,
+    });
+    expect(mapWithPresetRes.status).toBe(201);
+    expect(mapWithPresetRes.body.map.presetKey).toBe("tomb");
+    expect(mapWithPresetRes.body.map.imageUrl).toBe("/map-presets/tomb.svg");
+    expect(mapWithPresetRes.body.map.width).toBe(16);
+    expect(mapWithPresetRes.body.map.height).toBe(12);
+    const mapId = mapWithPresetRes.body.map.id;
+
+    // 3. GM updates map with custom image URL and new dimensions
+    const updateMapRes = await gmAgent.patch(`/api/maps/${mapId}`).send({
+      name: "Ancient Tomb Catacombs",
+      imageUrl: "https://example.com/custom-catacombs.png",
+      width: 20,
+      height: 15,
+    });
+    expect(updateMapRes.status).toBe(200);
+    expect(updateMapRes.body.map.imageUrl).toBe("https://example.com/custom-catacombs.png");
+    expect(updateMapRes.body.map.width).toBe(20);
+    expect(updateMapRes.body.map.height).toBe(15);
+
+    // 4. GM creates second map with overland-hex preset
+    const hexMapRes = await gmAgent.post(`/api/sessions/${sessionId}/maps`).send({
+      name: "Wilderness Hex Map",
+      presetKey: "overland-hex",
+      width: 24,
+      height: 18,
+    });
+    expect(hexMapRes.status).toBe(201);
+    expect(hexMapRes.body.map.presetKey).toBe("overland-hex");
+    expect(hexMapRes.body.map.imageUrl).toBe("/map-presets/overland-hex.svg");
+
+    // 5. Player attempts to update map background -> 403 Forbidden
+    const playerPatchAttempt = await playerAgent.patch(`/api/maps/${mapId}`).send({
+      imageUrl: "https://example.com/hacked-map.png",
+    });
+    expect(playerPatchAttempt.status).toBe(403);
+
+    // 6. Player attempts to create a map -> 403 Forbidden
+    const playerCreateAttempt = await playerAgent.post(`/api/sessions/${sessionId}/maps`).send({
+      name: "Player Map",
+      presetKey: "ruins",
+    });
+    expect(playerCreateAttempt.status).toBe(403);
+  });
 });
