@@ -34,6 +34,10 @@ export function createApp(): express.Express {
   app.use("/api/tokens", tokensRouter);
   app.use("/api", apiNotFound);
 
+  if (existsSync(config.avatarsDir)) {
+    app.use("/avatars", express.static(config.avatarsDir));
+  }
+
   // In production (and E2E) the server serves the built client; in dev the
   // Vite dev server proxies /api here instead and this block is skipped.
   if (existsSync(config.clientDist)) {

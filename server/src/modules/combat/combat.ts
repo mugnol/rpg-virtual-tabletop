@@ -37,6 +37,8 @@ export interface TurnQueueEntry {
   ac: number;
   speed: number;
   isActive: boolean;
+  imageUrl?: string | null;
+  avatarKey?: string | null;
 }
 
 export interface CombatTimer {
@@ -470,6 +472,8 @@ export function buildTurnQueue(
     hpMax: number;
     ac: number;
     speed?: number;
+    imageUrl?: string | null;
+    avatarKey?: string | null;
   }>,
   activeTokenId: string | null,
 ): TurnQueueEntry[] {
@@ -500,6 +504,8 @@ export function buildTurnQueue(
       ac: token.ac,
       speed: token.speed ?? 6,
       isActive: token.id === activeTokenId,
+      imageUrl: token.imageUrl ?? null,
+      avatarKey: token.avatarKey ?? null,
     });
   }
   return queue;

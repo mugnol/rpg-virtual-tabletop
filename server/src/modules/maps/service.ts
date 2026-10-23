@@ -23,6 +23,10 @@ import {
   computeMonsterStatsFromRole,
   getShadowdarkMonster,
 } from "../../rules/shadowdarkMonsters.js";
+import {
+  getPredefinedAvatar,
+  resolveTokenAvatar,
+} from "../../rules/avatars.js";
 import type {
   CombatAttackInput,
   CombatNextInput,
@@ -277,8 +281,9 @@ export async function placeToken(
     }
   }
 
+  let sheet: any = null;
   if (input.type === "CHARACTER" && input.characterSheetId) {
-    const sheet = await prisma.characterSheet.findUnique({
+    sheet = await prisma.characterSheet.findUnique({
       where: { id: input.characterSheetId },
     });
     if (sheet) {
@@ -330,6 +335,16 @@ export async function placeToken(
     };
   }
 
+  const resolvedAvatar = resolveTokenAvatar({
+    type: input.type,
+    avatarKey: input.avatarKey,
+    imageUrl: input.imageUrl,
+    characterClassId: sheet?.classId,
+    characterLevel: sheet?.level,
+    monsterKey: input.monsterKey,
+    monsterRole: input.monsterRole,
+  });
+
   const token = await prisma.mapToken.create({
     data: {
       mapId,
@@ -346,6 +361,8 @@ export async function placeToken(
           : input.type === "MONSTER"
             ? "#ef4444"
             : "#f59e0b"),
+      imageUrl: resolvedAvatar.imageUrl,
+      avatarKey: resolvedAvatar.avatarKey,
       hpMax,
       hpCurrent,
       ac,
@@ -455,9 +472,37 @@ export async function moveOrUpdateToken(
     }
   }
 
+  const updateData: Record<string, any> = {};
+  if (input.name !== undefined) updateData.name = input.name;
+  if (input.x !== undefined) updateData.x = input.x;
+  if (input.y !== undefined) updateData.y = input.y;
+  if (input.color !== undefined) updateData.color = input.color;
+  if (input.hpMax !== undefined) updateData.hpMax = input.hpMax;
+  if (input.hpCurrent !== undefined) updateData.hpCurrent = input.hpCurrent;
+  if (input.ac !== undefined) updateData.ac = input.ac;
+  if (input.speed !== undefined) updateData.speed = input.speed;
+  if (input.attackBonus !== undefined) updateData.attackBonus = input.attackBonus;
+  if (input.damageFormula !== undefined) updateData.damageFormula = input.damageFormula;
+  if (input.initiative !== undefined) updateData.initiative = input.initiative;
+  if (input.dexModifier !== undefined) updateData.dexModifier = input.dexModifier;
+  if (input.hasSurprise !== undefined) updateData.hasSurprise = input.hasSurprise;
+
+  if (input.imageUrl !== undefined) {
+    updateData.imageUrl = input.imageUrl;
+  }
+  if (input.avatarKey !== undefined) {
+    updateData.avatarKey = input.avatarKey;
+    if (input.imageUrl === undefined && input.avatarKey) {
+      const matched = getPredefinedAvatar(input.avatarKey);
+      if (matched) {
+        updateData.imageUrl = matched.url;
+      }
+    }
+  }
+
   const updated = await prisma.mapToken.update({
     where: { id: tokenId },
-    data: input,
+    data: updateData,
   });
 
   return updated;

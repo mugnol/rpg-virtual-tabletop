@@ -55,6 +55,20 @@ Tokens placed on the map belong to one of three types:
 - Any map change (grid size, theme, movement toggle), token placement, token move, or token deletion broadcasts immediately via WebSockets to all connected session participants.
 - Client state updates optimistically or synchronously to ensure all users view identical token positions.
 
+### BR-39: Token Images and Predefined Avatars
+- Tokens (`CHARACTER` and `MONSTER`) support visual avatar images via `avatarKey` (referencing bundled vector/raster assets) or `imageUrl` (custom URL / Data URL).
+- Built-in predefined asset library provides stylized, distinct SVG/PNG avatars for:
+  - **Shadowdark Classes & Level 0**: `peasant` (Level 0), `fighter`, `priest`, `thief`, `wizard`.
+  - **Generic Combat Roles**: `mook`, `soldier`, `striker`, `tank`, `controller`, `legendary`.
+  - **Monster Categories & Creatures**: `goblin`, `skeleton`, `zombie`, `orc`, `dragon`, `beast`, `demon`, `aberration`, `undead`.
+- **Automatic Assignment**:
+  - Creating a `CHARACTER` token from a sheet automatically assigns the avatar corresponding to the sheet's class (or `peasant` if level 0 / unclassed).
+  - Creating a `MONSTER` token automatically assigns the avatar corresponding to its monster type/key or combat role preset.
+- **Customization & Permissions**:
+  - The GM (and players for tokens they own) can pick from the predefined avatar gallery or provide a custom image URL / Data URL.
+- **Rendering**:
+  - Avatars render inside the circular tactical map tokens and as a visual thumbnail inside the Campaign Turn Queue list (`turn-queue-list`).
+
 ---
 
 ## 3. Use Cases (UC)
@@ -92,3 +106,8 @@ Tokens placed on the map belong to one of three types:
 ### UC-38: GM Deletes Token
 1. GM selects a token and clicks "Delete Token".
 2. Token is removed from the database and disappears in real-time from all clients.
+
+### UC-39: Token Avatar Selection & Custom Images
+1. When placing or configuring a token, GM (or player for owned character tokens) views the avatar picker gallery containing predefined class and monster avatars.
+2. User clicks a predefined avatar option or types a custom image URL.
+3. Token updates in real time and renders the chosen avatar image on both the tactical map cell and in the Campaign Turn Queue list.

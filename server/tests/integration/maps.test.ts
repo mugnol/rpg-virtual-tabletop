@@ -714,4 +714,85 @@ describe("Tactical Maps & Combat Integration (BR-35..BR-50)", () => {
     });
     expect(playerSettingsAttempt.status).toBe(403);
   });
+
+  it("provides predefined avatars library and auto-assigns / updates token avatars (BR-39, UC-39)", async () => {
+    seq += 1;
+    const gmAgent = await registerAgent(`avatar-gm-${seq}@test.dev`, "GM", "Avatar GM");
+    const playerAgent = await registerAgent(`avatar-p-${seq}@test.dev`, "PLAYER", "Avatar Player");
+    const campaignId = (await createSystemCampaign(gmAgent, `Avatar Camp ${seq}`, "shadowdark")).id;
+    await joinPlayer(gmAgent, playerAgent, campaignId);
+
+    // 1. GET /api/tokens/avatars
+    const avatarsRes = await gmAgent.get("/api/tokens/avatars");
+    expect(avatarsRes.status).toBe(200);
+    expect(Array.isArray(avatarsRes.body.avatars)).toBe(true);
+    expect(avatarsRes.body.avatars.length).toBeGreaterThanOrEqual(10);
+    const keys = avatarsRes.body.avatars.map((a: any) => a.key);
+    expect(keys).toContain("fighter");
+    expect(keys).toContain("wizard");
+    expect(keys).toContain("tank");
+
+    // Create session and map
+    const sessionRes = await gmAgent.post(`/api/campaigns/${campaignId}/sessions`).send({
+      name: "Avatar Session",
+    });
+    const sessionId = sessionRes.body.session.id;
+    const mapRes = await gmAgent.post(`/api/sessions/${sessionId}/maps`).send({
+      name: "Avatar Arena",
+      width: 10,
+      height: 10,
+    });
+    const mapId = mapRes.body.map.id;
+
+    // Create a Fighter PC sheet
+    const sheet = await createPc(playerAgent, campaignId, "Valerius the Bold", {
+      classId: "fighter",
+      level: 1,
+    });
+    const sheetId = sheet.id as string;
+
+    // 2. Place Character token linked to Fighter sheet without explicit avatar
+    const charTokRes = await gmAgent.post(`/api/maps/${mapId}/tokens`).send({
+      type: "CHARACTER",
+      characterSheetId: sheetId,
+      x: 1,
+      y: 1,
+    });
+    expect(charTokRes.status).toBe(201);
+    expect(charTokRes.body.token.avatarKey).toBe("fighter");
+    expect(charTokRes.body.token.imageUrl).toBe("/avatars/fighter.svg");
+
+    // 3. Place Monster token from compendium (Goblin) without explicit avatar
+    const gobTokRes = await gmAgent.post(`/api/maps/${mapId}/tokens`).send({
+      type: "MONSTER",
+      monsterKey: "goblin",
+      x: 3,
+      y: 3,
+    });
+    expect(gobTokRes.status).toBe(201);
+    expect(gobTokRes.body.token.avatarKey).toBe("goblin");
+    expect(gobTokRes.body.token.imageUrl).toBe("/avatars/goblin.svg");
+
+    // 4. Place Token with custom image URL and custom avatarKey
+    const customTokRes = await gmAgent.post(`/api/maps/${mapId}/tokens`).send({
+      type: "MONSTER",
+      name: "Custom Behemoth",
+      x: 5,
+      y: 5,
+      imageUrl: "https://example.com/behemoth.png",
+      avatarKey: "tank",
+    });
+    expect(customTokRes.status).toBe(201);
+    expect(customTokRes.body.token.avatarKey).toBe("tank");
+    expect(customTokRes.body.token.imageUrl).toBe("https://example.com/behemoth.png");
+
+    // 5. Update token avatar and image via PATCH /api/tokens/:id
+    const patchTokRes = await gmAgent.patch(`/api/tokens/${charTokRes.body.token.id}`).send({
+      avatarKey: "legendary",
+      imageUrl: "/avatars/legendary.svg",
+    });
+    expect(patchTokRes.status).toBe(200);
+    expect(patchTokRes.body.token.avatarKey).toBe("legendary");
+    expect(patchTokRes.body.token.imageUrl).toBe("/avatars/legendary.svg");
+  });
 });

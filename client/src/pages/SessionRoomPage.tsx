@@ -6,6 +6,7 @@ import {
   listSessionMaps,
   listMonsters,
   generateMonster,
+  listTokenAvatars,
   type DiceRollResult,
   type GameSession,
   type MapToken,
@@ -13,6 +14,7 @@ import {
   type SessionMessageItem,
   type SheetSummary,
   type MonsterSummary,
+  type PredefinedAvatar,
 } from "../api/client";
 import { useAuth } from "../auth/AuthContext";
 import { FormError } from "../components/FormError";
@@ -61,6 +63,9 @@ export function SessionRoomPage() {
   const [tokenAc, setTokenAc] = useState<string>("");
   const [tokenAttackBonus, setTokenAttackBonus] = useState<string>("");
   const [tokenDamage, setTokenDamage] = useState<string>("");
+  const [tokenAvatarKey, setTokenAvatarKey] = useState<string>("");
+  const [tokenImageUrl, setTokenImageUrl] = useState<string>("");
+  const [predefinedAvatars, setPredefinedAvatars] = useState<PredefinedAvatar[]>([]);
 
   // Monster token creation state
   const [monsterMode, setMonsterMode] = useState<"compendium" | "generic" | "procedural" | "custom">("compendium");
@@ -390,6 +395,9 @@ export function SessionRoomPage() {
 
   function handleOpenAddToken() {
     setIsAddTokenOpen(true);
+    listTokenAvatars()
+      .then(({ avatars }) => setPredefinedAvatars(avatars))
+      .catch(() => {});
     if (session?.campaignId) {
       listCampaignSheets(session.campaignId)
         .then(({ sheets }) => setCampaignSheets(sheets))
@@ -420,12 +428,44 @@ export function SessionRoomPage() {
       setTokenDamage(m.attacks[0]?.damage ?? "1d6");
       setMonsterDexModifier(m.modifiers.dex);
       setMonsterSpeed(m.movement.toLowerCase().includes("double") ? 12 : 6);
+
+      const slug = monsterId.toLowerCase();
+      let matchedKey = "soldier";
+      if (slug.includes("goblin")) matchedKey = "goblin";
+      else if (slug.includes("skeleton")) matchedKey = "skeleton";
+      else if (slug.includes("zombie")) matchedKey = "zombie";
+      else if (slug.includes("dragon")) matchedKey = "dragon";
+      else if (slug.includes("demon") || slug.includes("devil") || slug.includes("imp")) matchedKey = "demon";
+      else if (
+        slug.includes("ghoul") ||
+        slug.includes("ghast") ||
+        slug.includes("wight") ||
+        slug.includes("wraith") ||
+        slug.includes("ghost") ||
+        slug.includes("lich") ||
+        slug.includes("undead")
+      )
+        matchedKey = "undead";
+      else if (
+        slug.includes("wolf") ||
+        slug.includes("bear") ||
+        slug.includes("boar") ||
+        slug.includes("spider") ||
+        slug.includes("beast")
+      )
+        matchedKey = "beast";
+      else if (slug.includes("aboleth") || slug.includes("cloaker") || slug.includes("eye"))
+        matchedKey = "aberration";
+      setTokenAvatarKey(matchedKey);
+      setTokenImageUrl(`/avatars/${matchedKey}.svg`);
     }
   }
 
   function handleRoleOrLevelChange(newRole: string, newLevel: number) {
     setMonsterRole(newRole);
     setMonsterLevel(String(newLevel));
+    setTokenAvatarKey(newRole.toLowerCase());
+    setTokenImageUrl(`/avatars/${newRole.toLowerCase()}.svg`);
     const lvl = Math.max(0, newLevel);
     let ac = 11 + Math.ceil(lvl / 2);
     let hp = Math.max(4, Math.round(lvl * 4.5));
@@ -493,6 +533,9 @@ export function SessionRoomPage() {
     const sheet = campaignSheets.find((s) => s.id === sheetId);
     if (sheet) {
       setTokenName(sheet.name);
+      const classKey = (sheet as any).classId?.toLowerCase() || (sheet.level === 0 ? "peasant" : "fighter");
+      setTokenAvatarKey(classKey);
+      setTokenImageUrl(`/avatars/${classKey}.svg`);
     }
   }
 
@@ -510,6 +553,8 @@ export function SessionRoomPage() {
             type: "CHARACTER",
             characterSheetId: tokenSheetId || undefined,
             name: sheet?.name || tokenName || "Character",
+            avatarKey: tokenAvatarKey || undefined,
+            imageUrl: tokenImageUrl || undefined,
           },
         }),
       );
@@ -531,6 +576,8 @@ export function SessionRoomPage() {
             damageFormula: tokenDamage || "1d6",
             dexModifier: monsterDexModifier,
             speed: monsterSpeed || 6,
+            avatarKey: tokenAvatarKey || undefined,
+            imageUrl: tokenImageUrl || undefined,
           },
         }),
       );
@@ -542,6 +589,8 @@ export function SessionRoomPage() {
           token: {
             type: "ITEM",
             name: tokenName || "Item",
+            avatarKey: tokenAvatarKey || undefined,
+            imageUrl: tokenImageUrl || undefined,
           },
         }),
       );
@@ -554,6 +603,8 @@ export function SessionRoomPage() {
     setTokenAttackBonus("");
     setTokenDamage("");
     setTokenSheetId("");
+    setTokenAvatarKey("");
+    setTokenImageUrl("");
   }
 
   function handleToggleMovement() {
@@ -1076,6 +1127,25 @@ export function SessionRoomPage() {
                       className={`turn-queue-item ${isCurrent ? "turn-queue-item-active" : ""}`}
                     >
                       <span className="turn-queue-order">#{idx + 1}</span>
+                      <span data-testid="turn-queue-avatar" className="turn-queue-avatar">
+                        {participant.imageUrl || participant.avatarKey ? (
+                          <img
+                            src={participant.imageUrl || `/avatars/${participant.avatarKey}.svg`}
+                            alt={participant.name}
+                            className="turn-queue-avatar-img"
+                          />
+                        ) : (
+                          <span
+                            className="turn-queue-avatar-placeholder"
+                            style={{
+                              backgroundColor:
+                                participant.color || (entityType === "character" ? "#6366f1" : "#ef4444"),
+                            }}
+                          >
+                            {participant.name.slice(0, 2).toUpperCase()}
+                          </span>
+                        )}
+                      </span>
                       <span
                         data-testid="turn-queue-initiative"
                         className="turn-queue-initiative"
@@ -1417,6 +1487,9 @@ export function SessionRoomPage() {
                       {cellTokens.map((token) => {
                         const isSelected = selectedTokenId === token.id;
                         const isTurn = map.combat?.active && activeTurnEntityId === token.id;
+                        const hasImage = Boolean(token.imageUrl || token.avatarKey);
+                        const imgSrc =
+                          token.imageUrl || (token.avatarKey ? `/avatars/${token.avatarKey}.svg` : "");
                         return (
                           <div
                             key={token.id}
@@ -1424,13 +1497,21 @@ export function SessionRoomPage() {
                             data-active-turn={isTurn ? "true" : "false"}
                             className={`map-token token-${token.type.toLowerCase()} ${
                               isSelected ? "token-selected" : ""
-                            } ${isTurn ? "token-active-turn" : ""}`}
+                            } ${isTurn ? "token-active-turn" : ""} ${hasImage ? "token-has-image" : ""}`}
                             style={{ backgroundColor: token.color || undefined }}
                             onClick={(e) => {
                               e.stopPropagation();
                               handleTokenClick(token);
                             }}
                           >
+                            {hasImage && (
+                              <img
+                                data-testid={`token-image-${token.id}`}
+                                src={imgSrc}
+                                alt={token.name}
+                                className="token-avatar-img"
+                              />
+                            )}
                             <span data-testid="token-name" className="token-name">
                               {token.name}
                             </span>
@@ -1716,6 +1797,64 @@ export function SessionRoomPage() {
                   />
                 </div>
               )}
+
+              {/* Token Avatar Selection & Custom Upload */}
+              <div className="form-group" style={{ marginTop: "0.75rem" }}>
+                <label>Token Avatar</label>
+                <div data-testid="token-avatar-picker" className="token-avatar-picker">
+                  {predefinedAvatars.map((av) => {
+                    const isSelected = tokenAvatarKey === av.key;
+                    return (
+                      <button
+                        key={av.key}
+                        type="button"
+                        data-testid={`token-avatar-option-${av.key}`}
+                        className={`avatar-option-btn ${isSelected ? "avatar-option-selected" : ""}`}
+                        onClick={() => {
+                          setTokenAvatarKey(av.key);
+                          setTokenImageUrl(av.url);
+                        }}
+                        title={av.name}
+                      >
+                        <img src={av.url} alt={av.name} className="avatar-preview-img" />
+                        <span className="avatar-label">{av.name}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              <div className="form-group">
+                <label>Custom Image URL or Data URL</label>
+                <input
+                  data-testid="token-image-url-input"
+                  type="text"
+                  value={tokenImageUrl}
+                  onChange={(e) => setTokenImageUrl(e.target.value)}
+                  placeholder="https://... or /avatars/fighter.svg or data:image/..."
+                />
+              </div>
+
+              <div className="form-group">
+                <label>Upload Custom Token Image (PNG, JPG, SVG, WebP)</label>
+                <input
+                  data-testid="token-image-file-input"
+                  type="file"
+                  accept="image/*"
+                  onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    if (file) {
+                      const reader = new FileReader();
+                      reader.onload = () => {
+                        if (typeof reader.result === "string") {
+                          setTokenImageUrl(reader.result);
+                        }
+                      };
+                      reader.readAsDataURL(file);
+                    }
+                  }}
+                />
+              </div>
 
               <div className="button-row" style={{ marginTop: "1rem" }}>
                 <button data-testid="token-submit-button" type="submit" className="btn btn-primary">

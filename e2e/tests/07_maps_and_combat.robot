@@ -444,3 +444,37 @@ GM places monster tokens via Compendium selector, Generic Combat Role preset, an
     Click TestID    token-submit-button
     Get Element    css=[data-testid="token-name"] >> nth=2
 
+GM selects predefined avatar or custom image for tokens and sees avatar thumbnails on map and turn queue
+    Register Via UI    avatar-gm-${TS}@e2e.test    gm    Avatar GM
+    Create System Campaign Via UI    Avatar Encounter    shadowdark
+
+    Click TestID    session-create-button
+    Fill TestID    session-name-input    Avatar Arena
+    Click TestID    session-create-submit
+    Click    css=[data-testid="session-item"]:has-text("Avatar Arena")
+    TestID Should Be Visible    page-session
+    TestID Should Be Visible    map-board
+
+    # GM opens add token modal
+    Click TestID    token-add-button
+    TestID Should Be Visible    token-avatar-picker
+    TestID Should Be Visible    token-image-url-input
+
+    # Place Monster with predefined Goblin avatar
+    Select Options By    css=[data-testid="token-type-select"]    value    MONSTER
+    Select Options By    css=[data-testid="monster-mode-select"]    value    compendium
+    Select Options By    css=[data-testid="monster-compendium-select"]    value    goblin
+    Click TestID    token-avatar-option-goblin
+    Click TestID    token-submit-button
+
+    # Verify token image is rendered on the board
+    TestID Should Be Visible    map-board
+    Get Element    css=[data-testid^="token-image-"]
+
+    # Start combat and verify avatar thumbnail in turn queue
+    Click TestID    combat-start-button
+    TestID Should Be Visible    combat-tracker
+    TestID Should Be Visible    turn-queue-list
+    Get Element    css=[data-testid="turn-queue-avatar"]
+
+

@@ -168,6 +168,8 @@ model MapToken {
   x                Int             @default(0)
   y                Int             @default(0)
   color            String          @default("#6366f1")
+  imageUrl         String?
+  avatarKey        String?
   hpMax            Int             @default(10)
   hpCurrent        Int             @default(10)
   ac               Int             @default(10)

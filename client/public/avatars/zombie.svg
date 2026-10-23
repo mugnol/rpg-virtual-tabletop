@@ -1,0 +1,26 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="100" height="100">
+  <defs>
+    <radialGradient id="zombieBg" cx="50%" cy="40%" r="55%">
+      <stop offset="0%" stop-color="#3f6212"/>
+      <stop offset="100%" stop-color="#142b08"/>
+    </radialGradient>
+  </defs>
+  <circle cx="50" cy="50" r="48" fill="url(#zombieBg)" stroke="#65a30d" stroke-width="3"/>
+  <!-- Shambling Zombie Face -->
+  <g fill="#4d7c0f" stroke="#1c1917" stroke-width="2" stroke-linejoin="round">
+    <path d="M50 20 C32 20 26 36 26 54 C26 72 38 78 50 80 C60 78 70 72 70 54 C70 36 66 20 50 20 Z"/>
+    <!-- Sunken / missing eye -->
+    <circle cx="40" cy="46" r="6" fill="#142b08" stroke="none"/>
+    <circle cx="60" cy="46" r="5" fill="#fef08a" stroke="#ca8a04" stroke-width="1"/>
+    <circle cx="61" cy="46" r="2" fill="#713f12" stroke="none"/>
+    <!-- Stitches / rot scars -->
+    <path d="M34 32 L46 26" stroke="#1c1917" stroke-width="2"/>
+    <line x1="36" y1="28" x2="38" y2="34" stroke="#1c1917" stroke-width="1.5"/>
+    <line x1="42" y1="26" x2="44" y2="32" stroke="#1c1917" stroke-width="1.5"/>
+    <!-- Slack open jaw -->
+    <path d="M36 64 C42 74 58 74 62 64 Z" fill="#142b08"/>
+    <polygon points="40,64 42,68 44,64" fill="#fef9c3" stroke="none"/>
+    <polygon points="54,64 56,68 58,64" fill="#fef9c3" stroke="none"/>
+  </g>
+  <circle cx="50" cy="50" r="47" fill="none" stroke="#052e16" stroke-width="1.5" opacity="0.6"/>
+</svg>

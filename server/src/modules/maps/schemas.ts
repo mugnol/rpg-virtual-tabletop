@@ -40,6 +40,8 @@ export const tokenCreateSchema = z.object({
   monsterKey: z.string().optional(),
   monsterRole: z.string().optional(),
   level: z.number().int().optional(),
+  imageUrl: z.string().trim().max(200000).nullable().optional(),
+  avatarKey: z.string().trim().max(100).nullable().optional(),
 });
 
 export const tokenUpdateSchema = z.object({
@@ -47,6 +49,8 @@ export const tokenUpdateSchema = z.object({
   x: z.number().int().min(0).optional(),
   y: z.number().int().min(0).optional(),
   color: z.string().optional(),
+  imageUrl: z.string().trim().max(200000).nullable().optional(),
+  avatarKey: z.string().trim().max(100).nullable().optional(),
   hpMax: z.number().int().min(1).optional(),
   hpCurrent: z.number().int().min(0).optional(),
   ac: z.number().int().min(0).optional(),

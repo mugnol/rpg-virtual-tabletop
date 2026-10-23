@@ -861,6 +861,110 @@ a {
   white-space: nowrap;
 }
 
+.token-avatar-img {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  object-fit: cover;
+  pointer-events: none;
+}
+
+.token-has-image .token-name {
+  position: absolute;
+  bottom: 1px;
+  background: rgba(0, 0, 0, 0.75);
+  padding: 0 3px;
+  border-radius: 2px;
+  max-width: 38px;
+  font-size: 0.55rem;
+  z-index: 2;
+}
+
+.turn-queue-avatar {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  flex-shrink: 0;
+}
+
+.turn-queue-avatar-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.turn-queue-avatar-placeholder {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.65rem;
+  font-weight: bold;
+  color: #fff;
+}
+
+.token-avatar-picker {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(70px, 1fr));
+  gap: 0.5rem;
+  max-height: 160px;
+  overflow-y: auto;
+  padding: 0.5rem;
+  background: rgba(15, 23, 42, 0.5);
+  border: 1px solid #334155;
+  border-radius: 6px;
+  margin-bottom: 0.75rem;
+}
+
+.avatar-option-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.25rem;
+  background: transparent;
+  border: 2px solid transparent;
+  border-radius: 6px;
+  padding: 0.35rem 0.2rem;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.avatar-option-btn:hover {
+  background: rgba(99, 102, 241, 0.2);
+  border-color: rgba(99, 102, 241, 0.5);
+}
+
+.avatar-option-selected {
+  background: rgba(99, 102, 241, 0.35);
+  border-color: #6366f1;
+}
+
+.avatar-preview-img {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  object-fit: cover;
+}
+
+.avatar-label {
+  font-size: 0.65rem;
+  color: #cbd5e1;
+  text-align: center;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 65px;
+}
+
 /* Combat Tracker Panel */
 .combat-tracker {
   background: #1e1b4b;

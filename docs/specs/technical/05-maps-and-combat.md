@@ -50,6 +50,8 @@ model MapToken {
   dexModifier      Int             @default(0)
   hasSurprise      Boolean         @default(false)
   initiativeMeta   String          @default("{}") // JSON serialized InitiativeRollMeta
+  imageUrl         String?
+  avatarKey        String?
   createdAt        DateTime        @default(now())
   updatedAt        DateTime        @updatedAt
 }
@@ -150,10 +152,12 @@ export interface FormattedCombatState {
   - Updates map name, theme, dimensions, or `allowPlayerMovement`.
 
 ### 2.2 Token Management
+- `GET /api/tokens/avatars`
+  - Returns predefined token avatar library with metadata, labels, and SVG asset paths for all Shadowdark classes (`peasant`, `fighter`, `priest`, `thief`, `wizard`), generic combat roles (`mook`, `soldier`, `striker`, `tank`, `controller`, `legendary`), and monster categories.
 - `POST /api/maps/:mapId/tokens` (GM only)
-  - Places a new token (`CHARACTER`, `MONSTER`, or `ITEM`).
-- `PATCH /api/tokens/:tokenId`
-  - Updates token stats or position `(x, y)` subject to movement and active turn rules.
+  - Places a new token (`CHARACTER`, `MONSTER`, or `ITEM`), accepting optional `imageUrl` and `avatarKey` (or auto-assigning from character class / monster catalog).
+- `PATCH /api/tokens/:tokenId` (Token owner or GM)
+  - Updates token stats, position `(x, y)`, `imageUrl`, or `avatarKey`.
 - `DELETE /api/tokens/:tokenId` (GM only)
   - Removes a token from the map (and removes from active `turnQueue` if present).
 

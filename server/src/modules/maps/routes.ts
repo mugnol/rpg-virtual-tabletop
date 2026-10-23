@@ -1,6 +1,7 @@
 import { Router } from "express";
 import { asyncHandler, parseBody } from "../../lib/http.js";
 import { requireAuth } from "../../middleware/auth.js";
+import { getPredefinedAvatars } from "../../rules/avatars.js";
 import {
   combatAttackSchema,
   combatNextSchema,
@@ -224,6 +225,14 @@ mapsRouter.post(
 // Tokens Router (mounted at /api/tokens)
 export const tokensRouter = Router();
 tokensRouter.use(requireAuth);
+
+tokensRouter.get(
+  "/avatars",
+  asyncHandler(async (_req, res) => {
+    const avatars = getPredefinedAvatars();
+    res.json({ avatars });
+  }),
+);
 
 tokensRouter.patch(
   "/:id",

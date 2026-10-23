@@ -1,0 +1,25 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="100" height="100">
+  <defs>
+    <radialGradient id="beastBg" cx="50%" cy="40%" r="55%">
+      <stop offset="0%" stop-color="#854d0e"/>
+      <stop offset="100%" stop-color="#2a1805"/>
+    </radialGradient>
+  </defs>
+  <circle cx="50" cy="50" r="48" fill="url(#beastBg)" stroke="#ca8a04" stroke-width="3"/>
+  <!-- Feral Wolf / Beast Head -->
+  <g fill="#a16207" stroke="#3c2207" stroke-width="2" stroke-linejoin="round">
+    <!-- Pointed Ears -->
+    <polygon points="36,40 24,18 42,28"/>
+    <polygon points="64,40 76,18 58,28"/>
+    <!-- Head / Mane -->
+    <path d="M50 28 C34 28 30 44 26 58 L36 62 L40 76 L50 82 L60 76 L64 62 L74 58 C70 44 66 28 50 28 Z"/>
+    <!-- Eyes -->
+    <polygon points="40,46 45,48 40,51" fill="#facc15" stroke="none"/>
+    <polygon points="60,46 55,48 60,51" fill="#facc15" stroke="none"/>
+    <!-- Snout & Fangs -->
+    <polygon points="46,74 50,78 54,74" fill="#000" stroke="none"/>
+    <polygon points="44,70 46,74 48,70" fill="#fff" stroke="none"/>
+    <polygon points="52,70 54,74 56,70" fill="#fff" stroke="none"/>
+  </g>
+  <circle cx="50" cy="50" r="47" fill="none" stroke="#1c0f02" stroke-width="1.5" opacity="0.6"/>
+</svg>

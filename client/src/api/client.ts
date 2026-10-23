@@ -489,6 +489,8 @@ export interface MapToken {
   x: number;
   y: number;
   color: string;
+  imageUrl?: string | null;
+  avatarKey?: string | null;
   hpMax: number;
   hpCurrent: number;
   ac: number;
@@ -499,6 +501,9 @@ export interface MapToken {
   dexModifier?: number;
   hasSurprise?: boolean;
   initiativeMeta?: string;
+  monsterKey?: string;
+  monsterRole?: string;
+  level?: number;
 }
 
 export interface InitiativeRollMeta {
@@ -528,6 +533,15 @@ export interface TurnQueueEntry {
   ac: number;
   speed: number;
   isActive: boolean;
+  imageUrl?: string | null;
+  avatarKey?: string | null;
+}
+
+export interface PredefinedAvatar {
+  key: string;
+  name: string;
+  category: "class" | "monster" | "role";
+  url: string;
 }
 
 export interface CombatTimer {
@@ -617,6 +631,10 @@ export function placeToken(
   input: Partial<MapToken>,
 ): Promise<{ token: MapToken }> {
   return request("POST", `/maps/${mapId}/tokens`, input);
+}
+
+export function listTokenAvatars(): Promise<{ avatars: PredefinedAvatar[] }> {
+  return request("GET", "/tokens/avatars");
 }
 
 export function updateToken(

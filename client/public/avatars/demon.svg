@@ -1,0 +1,25 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="100" height="100">
+  <defs>
+    <radialGradient id="demonBg" cx="50%" cy="40%" r="55%">
+      <stop offset="0%" stop-color="#ea580c"/>
+      <stop offset="100%" stop-color="#431407"/>
+    </radialGradient>
+  </defs>
+  <circle cx="50" cy="50" r="48" fill="url(#demonBg)" stroke="#f97316" stroke-width="3"/>
+  <!-- Fiend / Demon Face -->
+  <g fill="#9a3412" stroke="#2a0802" stroke-width="2" stroke-linejoin="round">
+    <!-- Ram Horns -->
+    <path d="M38 34 C26 22 14 26 14 38 C14 50 26 48 34 44" fill="#431407"/>
+    <path d="M62 34 C74 22 86 26 86 38 C86 50 74 48 66 44" fill="#431407"/>
+    <!-- Head -->
+    <path d="M50 24 C36 24 32 38 32 56 C32 72 44 80 50 82 C56 80 68 72 68 56 C68 38 64 24 50 24 Z"/>
+    <!-- Blazing Eyes -->
+    <polygon points="40,46 47,48 41,52" fill="#fde047" stroke="#ea580c" stroke-width="1"/>
+    <polygon points="60,46 53,48 59,52" fill="#fde047" stroke="#ea580c" stroke-width="1"/>
+    <!-- Mouth & Fangs -->
+    <path d="M42 66 Q50 72 58 66" fill="#1c0702" stroke="#431407" stroke-width="2"/>
+    <polygon points="45,66 47,70 49,66" fill="#fff" stroke="none"/>
+    <polygon points="51,66 53,70 55,66" fill="#fff" stroke="none"/>
+  </g>
+  <circle cx="50" cy="50" r="47" fill="none" stroke="#1f0a05" stroke-width="1.5" opacity="0.6"/>
+</svg>

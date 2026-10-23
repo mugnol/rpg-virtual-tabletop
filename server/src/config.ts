@@ -34,4 +34,5 @@ export const config = {
   cookieSecure,
   // Resolved from both src/ (tsx dev) and dist/ (built) — both are one level below server/.
   clientDist: process.env.CLIENT_DIST ?? path.resolve(here, "../../client/dist"),
+  avatarsDir: path.resolve(here, "../../client/public/avatars"),
 } as const;
