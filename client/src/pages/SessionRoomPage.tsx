@@ -158,16 +158,6 @@ export function SessionRoomPage() {
       })
       .catch(() => {});
 
-    listSessionMaps(id)
-      .then(({ maps }) => {
-        if (cancelled) return;
-        setSessionMaps(maps);
-        if (maps.length > 0) {
-          setMap((prev) => prev ?? maps[0]);
-        }
-      })
-      .catch(() => {});
-
     // Establish WebSocket connection
     const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
     const wsUrl = `${protocol}//${window.location.host}/ws/sessions/${id}`;
@@ -183,7 +173,12 @@ export function SessionRoomPage() {
             setPresence(payload.presence || []);
             setMessages(payload.messages || []);
             if (payload.maps && payload.maps.length > 0) {
-              setSessionMaps(payload.maps);
+              setSessionMaps((prev) => {
+                const mapById = new Map<string, SessionMap>();
+                for (const m of prev) mapById.set(m.id, m);
+                for (const m of payload.maps) mapById.set(m.id, m);
+                return Array.from(mapById.values());
+              });
               setMap((prev) => prev ?? payload.maps[0]);
             }
             // Check if current user is owner (GM)
@@ -259,9 +254,12 @@ export function SessionRoomPage() {
 
           case "map_updated": {
             setMap((prev) => (prev?.id === payload.map.id ? payload.map : prev));
-            setSessionMaps((prev) =>
-              prev.map((m) => (m.id === payload.map.id ? payload.map : m)),
-            );
+            setSessionMaps((prev) => {
+              const exists = prev.some((m) => m.id === payload.map.id);
+              return exists
+                ? prev.map((m) => (m.id === payload.map.id ? payload.map : m))
+                : [...prev, payload.map];
+            });
             break;
           }
 
@@ -371,8 +369,14 @@ export function SessionRoomPage() {
       }
     };
 
+    ws.onopen = () => {
+      setError((prev) => (prev === "WebSocket connection failed" ? null : prev));
+    };
+
     ws.onerror = () => {
-      setError("WebSocket connection failed");
+      if (ws.readyState === WebSocket.CLOSED || ws.readyState === WebSocket.CLOSING) {
+        setError("WebSocket connection failed");
+      }
     };
 
     return () => {
@@ -466,9 +470,12 @@ export function SessionRoomPage() {
         imageUrl: editMapImageUrl || null,
       });
       setMap(updated.map);
-      setSessionMaps((prev) =>
-        prev.map((m) => (m.id === updated.map.id ? updated.map : m)),
-      );
+      setSessionMaps((prev) => {
+        const exists = prev.some((m) => m.id === updated.map.id);
+        return exists
+          ? prev.map((m) => (m.id === updated.map.id ? updated.map : m))
+          : [...prev, updated.map];
+      });
       setIsMapSettingsOpen(false);
       wsRef.current?.send(
         JSON.stringify({
@@ -514,9 +521,24 @@ export function SessionRoomPage() {
         presetKey: createMapPresetKey || null,
         imageUrl: createMapImageUrl || null,
       });
-      setSessionMaps((prev) => [...prev, created.map]);
+      setSessionMaps((prev) => {
+        const exists = prev.some((m) => m.id === created.map.id);
+        return exists ? prev : [...prev, created.map];
+      });
       setMap(created.map);
       setIsMapCreateOpen(false);
+      listSessionMaps(id)
+        .then(({ maps }) => {
+          if (maps.length > 0) {
+            setSessionMaps((prev) => {
+              const mapById = new Map<string, SessionMap>();
+              for (const m of prev) mapById.set(m.id, m);
+              for (const m of maps) mapById.set(m.id, m);
+              return Array.from(mapById.values());
+            });
+          }
+        })
+        .catch(() => {});
       wsRef.current?.send(
         JSON.stringify({
           type: "switch_map",
