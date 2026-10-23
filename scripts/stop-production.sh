@@ -7,6 +7,17 @@ cd "$(dirname "$0")/.."
 
 PID_FILE="server.pid"
 FORWARD_PID_FILE="forward80.pid"
+TUNNEL_PID_FILE="tunnel.pid"
+
+if [ -f "$TUNNEL_PID_FILE" ]; then
+  TUN_PID=$(cat "$TUNNEL_PID_FILE" 2>/dev/null || true)
+  if [ -n "$TUN_PID" ] && kill -0 "$TUN_PID" 2>/dev/null; then
+    echo "Stopping tunnel ($TUN_PID)..."
+    kill "$TUN_PID" 2>/dev/null || true
+  fi
+  rm -f "$TUNNEL_PID_FILE"
+fi
+pkill -f "scripts/tunnel.cjs" 2>/dev/null || true
 
 if [ -f "$FORWARD_PID_FILE" ]; then
   FWD_PID=$(cat "$FORWARD_PID_FILE" 2>/dev/null || true)

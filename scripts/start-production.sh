@@ -59,13 +59,26 @@ if ! curl -sf "http://127.0.0.1:${PORT}/api/health" >/dev/null 2>&1; then
   exit 1
 fi
 
-# Start transparent port 80 proxy so user can access via http://<IP> or http://<IP>:3001
+# Start transparent port 80 & 3000 proxy so user can access via http://<IP> or http://<IP>:3001
 if [ -f "scripts/forward-80.cjs" ]; then
   sudo pkill -f "scripts/forward-80.cjs" 2>/dev/null || true
   nohup setsid sudo node "$PWD/scripts/forward-80.cjs" > /tmp/rpg-forward80.log 2>&1 < /dev/null &
   sleep 1
   pgrep -f "scripts/forward-80.cjs" | head -n 1 > "$FORWARD_PID_FILE"
-  echo "Port 80 forwarder running (http://${HOST}:80 -> :3001)."
+  echo "Port forwarder running (http://${HOST}:80 and :3000 -> :3001)."
+fi
+
+# Start optional Internet Tunnel (HTTPS)
+if [ "${EXPOSE_TUNNEL:-true}" = "true" ] && [ -f "scripts/tunnel.cjs" ]; then
+  TUNNEL_PID_FILE="tunnel.pid"
+  pkill -f "scripts/tunnel.cjs" 2>/dev/null || true
+  rm -f public-url.txt
+  nohup setsid node "$PWD/scripts/tunnel.cjs" > /tmp/rpg-tunnel.log 2>&1 < /dev/null &
+  sleep 2
+  pgrep -f "scripts/tunnel.cjs" | head -n 1 > "$TUNNEL_PID_FILE" || true
+  if [ -f "public-url.txt" ]; then
+    echo "Public HTTPS tunnel ready: $(cat public-url.txt)"
+  fi
 fi
 
 exit 0
