@@ -409,6 +409,17 @@ export function attachWebSocketServer(server: http.Server): WebSocketServer {
               }
 
               // --- Phase 4: Maps, Tokens & Combat ---
+              case "switch_map": {
+                const mapId = typeof payload.mapId === "string" ? payload.mapId : "";
+                const targetMap = await getMap(user.id, mapId);
+                broadcastToRoom(sessionId, {
+                  type: "active_map_changed",
+                  mapId,
+                  map: targetMap,
+                });
+                break;
+              }
+
               case "update_map": {
                 const mapId = typeof payload.mapId === "string" ? payload.mapId : "";
                 const data = (payload.data ?? {}) as Record<string, unknown>;

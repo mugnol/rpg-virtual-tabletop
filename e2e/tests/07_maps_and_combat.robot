@@ -477,4 +477,38 @@ GM selects predefined avatar or custom image for tokens and sees avatar thumbnai
     TestID Should Be Visible    turn-queue-list
     Get Element    css=[data-testid="turn-queue-avatar"]
 
+GM selects built-in map preset or custom image, updates dimensions, and switches active map in real time
+    Register Via UI    mapimg-gm-${TS}@e2e.test    gm    Map Master GM
+    Create System Campaign Via UI    Map Image Adventure    shadowdark
+
+    Click TestID    session-create-button
+    Fill TestID    session-name-input    Dungeon Crawl
+    Click TestID    session-create-submit
+    Click    css=[data-testid="session-item"]:has-text("Dungeon Crawl")
+    TestID Should Be Visible    page-session
+    TestID Should Be Visible    map-board
+
+    # GM edits initial map background preset
+    Click TestID    map-settings-button
+    TestID Should Be Visible    map-preset-picker
+    TestID Should Be Visible    map-image-url-input
+    Click TestID    map-preset-option-tomb
+    Click TestID    map-save-button
+    TestID Should Be Visible    map-background-image
+    Get Element    css=[data-testid="map-background-image"][src*="tomb"]
+
+    # GM creates a second map (Overland Hex)
+    Click TestID    map-create-button
+    TestID Should Be Visible    map-preset-picker
+    Fill TestID    map-create-name-input    Overland Hex
+    Click TestID    map-preset-option-overland-hex
+    Click TestID    map-create-submit
+
+    # Switch active map via map-selector
+    TestID Should Be Visible    map-selector
+    Select Options By    css=[data-testid="map-selector"]    text    Overland Hex
+    TestID Should Be Visible    map-background-image
+    Get Element    css=[data-testid="map-background-image"][src*="overland-hex"]
+
+
 

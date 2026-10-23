@@ -4,9 +4,12 @@ import {
   getSession,
   listCampaignSheets,
   listSessionMaps,
+  createSessionMap,
+  updateMap,
   listMonsters,
   generateMonster,
   listTokenAvatars,
+  listMapPresets,
   type DiceRollResult,
   type GameSession,
   type MapToken,
@@ -15,6 +18,7 @@ import {
   type SheetSummary,
   type MonsterSummary,
   type PredefinedAvatar,
+  type MapPreset,
 } from "../api/client";
 import { useAuth } from "../auth/AuthContext";
 import { FormError } from "../components/FormError";
@@ -43,6 +47,26 @@ export function SessionRoomPage() {
 
   // Map and Combat state
   const [map, setMap] = useState<SessionMap | null>(null);
+  const [sessionMaps, setSessionMaps] = useState<SessionMap[]>([]);
+  const [mapPresets, setMapPresets] = useState<MapPreset[]>([]);
+  const [isMapSettingsOpen, setIsMapSettingsOpen] = useState(false);
+  const [isMapCreateOpen, setIsMapCreateOpen] = useState(false);
+
+  // Map edit/create form state
+  const [editMapName, setEditMapName] = useState("");
+  const [editMapTheme, setEditMapTheme] = useState("stone-dungeon");
+  const [editMapWidth, setEditMapWidth] = useState("12");
+  const [editMapHeight, setEditMapHeight] = useState("8");
+  const [editMapPresetKey, setEditMapPresetKey] = useState<string>("");
+  const [editMapImageUrl, setEditMapImageUrl] = useState<string>("");
+
+  const [createMapName, setCreateMapName] = useState("");
+  const [createMapTheme, setCreateMapTheme] = useState("stone-dungeon");
+  const [createMapWidth, setCreateMapWidth] = useState("12");
+  const [createMapHeight, setCreateMapHeight] = useState("8");
+  const [createMapPresetKey, setCreateMapPresetKey] = useState<string>("");
+  const [createMapImageUrl, setCreateMapImageUrl] = useState<string>("");
+
   const [campaignSheets, setCampaignSheets] = useState<SheetSummary[]>([]);
   const [selectedTokenId, setSelectedTokenId] = useState<string | null>(null);
   const [combatTargetId, setCombatTargetId] = useState<string>("");
@@ -128,9 +152,16 @@ export function SessionRoomPage() {
         setLoading(false);
       });
 
+    listMapPresets()
+      .then(({ presets }) => {
+        if (!cancelled) setMapPresets(presets);
+      })
+      .catch(() => {});
+
     listSessionMaps(id)
       .then(({ maps }) => {
         if (cancelled) return;
+        setSessionMaps(maps);
         if (maps.length > 0) {
           setMap((prev) => prev ?? maps[0]);
         }
@@ -152,7 +183,8 @@ export function SessionRoomPage() {
             setPresence(payload.presence || []);
             setMessages(payload.messages || []);
             if (payload.maps && payload.maps.length > 0) {
-              setMap(payload.maps[0]);
+              setSessionMaps(payload.maps);
+              setMap((prev) => prev ?? payload.maps[0]);
             }
             // Check if current user is owner (GM)
             if (payload.session && user?.role === "GM") {
@@ -214,8 +246,22 @@ export function SessionRoomPage() {
             break;
           }
 
-          case "map_updated": {
+          case "active_map_changed": {
             setMap(payload.map);
+            setSessionMaps((prev) => {
+              const exists = prev.some((m) => m.id === payload.map.id);
+              return exists
+                ? prev.map((m) => (m.id === payload.map.id ? payload.map : m))
+                : [...prev, payload.map];
+            });
+            break;
+          }
+
+          case "map_updated": {
+            setMap((prev) => (prev?.id === payload.map.id ? payload.map : prev));
+            setSessionMaps((prev) =>
+              prev.map((m) => (m.id === payload.map.id ? payload.map : m)),
+            );
             break;
           }
 
@@ -391,6 +437,108 @@ export function SessionRoomPage() {
         messageId,
       }),
     );
+  }
+
+  function handleOpenMapSettings() {
+    if (!map) return;
+    setEditMapName(map.name);
+    setEditMapTheme(map.theme);
+    setEditMapWidth(String(map.width));
+    setEditMapHeight(String(map.height));
+    setEditMapPresetKey(map.presetKey || "");
+    setEditMapImageUrl(map.imageUrl || "");
+    setIsMapSettingsOpen(true);
+    listMapPresets()
+      .then(({ presets }) => setMapPresets(presets))
+      .catch(() => {});
+  }
+
+  async function handleSaveMapSettings(e: FormEvent) {
+    e.preventDefault();
+    if (!map) return;
+    try {
+      const updated = await updateMap(map.id, {
+        name: editMapName,
+        theme: editMapTheme,
+        width: Number.parseInt(editMapWidth, 10) || 12,
+        height: Number.parseInt(editMapHeight, 10) || 8,
+        presetKey: editMapPresetKey || null,
+        imageUrl: editMapImageUrl || null,
+      });
+      setMap(updated.map);
+      setSessionMaps((prev) =>
+        prev.map((m) => (m.id === updated.map.id ? updated.map : m)),
+      );
+      setIsMapSettingsOpen(false);
+      wsRef.current?.send(
+        JSON.stringify({
+          type: "update_map",
+          mapId: map.id,
+          data: {
+            name: editMapName,
+            theme: editMapTheme,
+            width: Number.parseInt(editMapWidth, 10) || 12,
+            height: Number.parseInt(editMapHeight, 10) || 8,
+            presetKey: editMapPresetKey || null,
+            imageUrl: editMapImageUrl || null,
+          },
+        }),
+      );
+    } catch {
+      // ignore
+    }
+  }
+
+  function handleOpenCreateMap() {
+    setCreateMapName("New Tactical Map");
+    setCreateMapTheme("stone-dungeon");
+    setCreateMapWidth("12");
+    setCreateMapHeight("8");
+    setCreateMapPresetKey("");
+    setCreateMapImageUrl("");
+    setIsMapCreateOpen(true);
+    listMapPresets()
+      .then(({ presets }) => setMapPresets(presets))
+      .catch(() => {});
+  }
+
+  async function handleCreateMapSubmit(e: FormEvent) {
+    e.preventDefault();
+    if (!id) return;
+    try {
+      const created = await createSessionMap(id, {
+        name: createMapName,
+        theme: createMapTheme,
+        width: Number.parseInt(createMapWidth, 10) || 12,
+        height: Number.parseInt(createMapHeight, 10) || 8,
+        presetKey: createMapPresetKey || null,
+        imageUrl: createMapImageUrl || null,
+      });
+      setSessionMaps((prev) => [...prev, created.map]);
+      setMap(created.map);
+      setIsMapCreateOpen(false);
+      wsRef.current?.send(
+        JSON.stringify({
+          type: "switch_map",
+          mapId: created.map.id,
+        }),
+      );
+    } catch {
+      // ignore
+    }
+  }
+
+  function handleSwitchActiveMap(targetMapId: string) {
+    const target = sessionMaps.find((m) => m.id === targetMapId);
+    if (target) {
+      setMap(target);
+      wsRef.current?.send(
+        JSON.stringify({
+          type: "switch_map",
+          mapId: targetMapId,
+        }),
+      );
+    }
   }
 
   function handleOpenAddToken() {
@@ -1416,14 +1564,45 @@ export function SessionRoomPage() {
 
           {/* Map Toolbar */}
           <div className="map-toolbar">
-            <div className="map-info">
+            <div className="map-info" style={{ display: "flex", alignItems: "center", gap: "0.75rem", flexWrap: "wrap" }}>
               <h3>
                 {map.name} ({map.width}x{map.height})
               </h3>
+              {sessionMaps.length > 1 && (
+                <select
+                  data-testid="map-selector"
+                  value={map.id}
+                  onChange={(e) => handleSwitchActiveMap(e.target.value)}
+                  className="select-compact"
+                  title="Switch Active Map"
+                >
+                  {sessionMaps.map((m) => (
+                    <option key={m.id} value={m.id}>
+                      {m.name}
+                    </option>
+                  ))}
+                </select>
+              )}
             </div>
             <div className="map-toolbar-actions">
               {effectiveIsOwner && (
                 <>
+                  <button
+                    data-testid="map-create-button"
+                    type="button"
+                    className="btn btn-outline-secondary btn-sm"
+                    onClick={handleOpenCreateMap}
+                  >
+                    + New Map
+                  </button>
+                  <button
+                    data-testid="map-settings-button"
+                    type="button"
+                    className="btn btn-outline-secondary btn-sm"
+                    onClick={handleOpenMapSettings}
+                  >
+                    ⚙️ Map Settings
+                  </button>
                   <button
                     data-testid="token-add-button"
                     type="button"
@@ -1465,6 +1644,14 @@ export function SessionRoomPage() {
                 gridTemplateRows: `repeat(${map.height}, 48px)`,
               }}
             >
+              {(map.imageUrl || map.presetKey) && (
+                <img
+                  data-testid="map-background-image"
+                  src={map.imageUrl || `/map-presets/${map.presetKey}.svg`}
+                  alt={map.name}
+                  className="map-background-image"
+                />
+              )}
               {Array.from({ length: map.height }, (_, y) =>
                 Array.from({ length: map.width }, (_, x) => {
                   const cellTokens = map.tokens.filter((t) => t.x === x && t.y === y);
@@ -1530,6 +1717,260 @@ export function SessionRoomPage() {
             </div>
           </div>
         </section>
+      )}
+
+      {/* Map Settings Modal */}
+      {isMapSettingsOpen && map && (
+        <div className="modal-overlay" onClick={() => setIsMapSettingsOpen(false)}>
+          <div className="modal-card" onClick={(e) => e.stopPropagation()}>
+            <h3>Map Settings & Background</h3>
+            <form onSubmit={handleSaveMapSettings}>
+              <div className="form-group">
+                <label>Map Name</label>
+                <input
+                  type="text"
+                  value={editMapName}
+                  onChange={(e) => setEditMapName(e.target.value)}
+                  required
+                />
+              </div>
+
+              <div style={{ display: "flex", gap: "0.5rem", marginBottom: "0.75rem" }}>
+                <div style={{ flex: 1 }}>
+                  <label style={{ fontSize: "0.85rem" }}>Grid Width</label>
+                  <input
+                    type="number"
+                    min="4"
+                    max="64"
+                    value={editMapWidth}
+                    onChange={(e) => setEditMapWidth(e.target.value)}
+                  />
+                </div>
+                <div style={{ flex: 1 }}>
+                  <label style={{ fontSize: "0.85rem" }}>Grid Height</label>
+                  <input
+                    type="number"
+                    min="4"
+                    max="64"
+                    value={editMapHeight}
+                    onChange={(e) => setEditMapHeight(e.target.value)}
+                  />
+                </div>
+              </div>
+
+              <div className="form-group">
+                <label>Theme</label>
+                <select
+                  value={editMapTheme}
+                  onChange={(e) => setEditMapTheme(e.target.value)}
+                >
+                  <option value="stone-dungeon">Stone Dungeon</option>
+                  <option value="forest-clearing">Forest Clearing</option>
+                  <option value="tavern-cellar">Tavern Cellar</option>
+                </select>
+              </div>
+
+              {/* Map Presets Picker */}
+              <div className="form-group">
+                <label>Built-in Map Presets (Shadowdark pgs. 130–135)</label>
+                <div data-testid="map-preset-picker" className="map-preset-picker">
+                  {mapPresets.map((preset) => {
+                    const isSelected = editMapPresetKey === preset.key;
+                    return (
+                      <button
+                        key={preset.key}
+                        type="button"
+                        data-testid={`map-preset-option-${preset.key}`}
+                        className={`map-preset-option-btn ${isSelected ? "map-preset-option-selected" : ""}`}
+                        onClick={() => {
+                          setEditMapPresetKey(preset.key);
+                          setEditMapImageUrl(preset.url);
+                        }}
+                        title={preset.description}
+                      >
+                        <img src={preset.url} alt={preset.name} className="map-preset-preview-img" />
+                        <span className="map-preset-label">{preset.name}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              <div className="form-group">
+                <label>Custom Image URL or Data URL</label>
+                <input
+                  data-testid="map-image-url-input"
+                  type="text"
+                  value={editMapImageUrl}
+                  onChange={(e) => setEditMapImageUrl(e.target.value)}
+                  placeholder="https://... or /map-presets/tomb.svg or data:image/..."
+                />
+              </div>
+
+              <div className="form-group">
+                <label>Upload Map Image File (PNG, JPG, SVG, WebP)</label>
+                <input
+                  data-testid="map-image-file-input"
+                  type="file"
+                  accept="image/*"
+                  onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    if (file) {
+                      const reader = new FileReader();
+                      reader.onload = () => {
+                        if (typeof reader.result === "string") {
+                          setEditMapImageUrl(reader.result);
+                        }
+                      };
+                      reader.readAsDataURL(file);
+                    }
+                  }}
+                />
+              </div>
+
+              <div className="button-row" style={{ marginTop: "1rem" }}>
+                <button data-testid="map-save-button" type="submit" className="btn btn-primary">
+                  Save Settings
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-secondary"
+                  onClick={() => setIsMapSettingsOpen(false)}
+                >
+                  Cancel
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Create Map Modal */}
+      {isMapCreateOpen && (
+        <div className="modal-overlay" onClick={() => setIsMapCreateOpen(false)}>
+          <div className="modal-card" onClick={(e) => e.stopPropagation()}>
+            <h3>Create New Campaign Map</h3>
+            <form onSubmit={handleCreateMapSubmit}>
+              <div className="form-group">
+                <label>Map Name</label>
+                <input
+                  data-testid="map-create-name-input"
+                  type="text"
+                  value={createMapName}
+                  onChange={(e) => setCreateMapName(e.target.value)}
+                  placeholder="e.g. Overland Hex, Ancient Ruins"
+                  required
+                />
+              </div>
+
+              <div style={{ display: "flex", gap: "0.5rem", marginBottom: "0.75rem" }}>
+                <div style={{ flex: 1 }}>
+                  <label style={{ fontSize: "0.85rem" }}>Grid Width</label>
+                  <input
+                    type="number"
+                    min="4"
+                    max="64"
+                    value={createMapWidth}
+                    onChange={(e) => setCreateMapWidth(e.target.value)}
+                  />
+                </div>
+                <div style={{ flex: 1 }}>
+                  <label style={{ fontSize: "0.85rem" }}>Grid Height</label>
+                  <input
+                    type="number"
+                    min="4"
+                    max="64"
+                    value={createMapHeight}
+                    onChange={(e) => setCreateMapHeight(e.target.value)}
+                  />
+                </div>
+              </div>
+
+              <div className="form-group">
+                <label>Theme</label>
+                <select
+                  value={createMapTheme}
+                  onChange={(e) => setCreateMapTheme(e.target.value)}
+                >
+                  <option value="stone-dungeon">Stone Dungeon</option>
+                  <option value="forest-clearing">Forest Clearing</option>
+                  <option value="tavern-cellar">Tavern Cellar</option>
+                </select>
+              </div>
+
+              {/* Map Presets Picker */}
+              <div className="form-group">
+                <label>Built-in Map Presets (Shadowdark pgs. 130–135)</label>
+                <div data-testid="map-preset-picker" className="map-preset-picker">
+                  {mapPresets.map((preset) => {
+                    const isSelected = createMapPresetKey === preset.key;
+                    return (
+                      <button
+                        key={preset.key}
+                        type="button"
+                        data-testid={`map-preset-option-${preset.key}`}
+                        className={`map-preset-option-btn ${isSelected ? "map-preset-option-selected" : ""}`}
+                        onClick={() => {
+                          setCreateMapPresetKey(preset.key);
+                          setCreateMapImageUrl(preset.url);
+                        }}
+                        title={preset.description}
+                      >
+                        <img src={preset.url} alt={preset.name} className="map-preset-preview-img" />
+                        <span className="map-preset-label">{preset.name}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              <div className="form-group">
+                <label>Custom Image URL or Data URL</label>
+                <input
+                  data-testid="map-image-url-input"
+                  type="text"
+                  value={createMapImageUrl}
+                  onChange={(e) => setCreateMapImageUrl(e.target.value)}
+                  placeholder="https://... or /map-presets/tomb.svg or data:image/..."
+                />
+              </div>
+
+              <div className="form-group">
+                <label>Upload Map Image File (PNG, JPG, SVG, WebP)</label>
+                <input
+                  data-testid="map-image-file-input"
+                  type="file"
+                  accept="image/*"
+                  onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    if (file) {
+                      const reader = new FileReader();
+                      reader.onload = () => {
+                        if (typeof reader.result === "string") {
+                          setCreateMapImageUrl(reader.result);
+                        }
+                      };
+                      reader.readAsDataURL(file);
+                    }
+                  }}
+                />
+              </div>
+
+              <div className="button-row" style={{ marginTop: "1rem" }}>
+                <button data-testid="map-create-submit" type="submit" className="btn btn-primary">
+                  Create Map
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-secondary"
+                  onClick={() => setIsMapCreateOpen(false)}
+                >
+                  Cancel
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
       )}
 
       {/* Place Token Modal */}

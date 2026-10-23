@@ -1,0 +1,36 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 600" width="100%" height="100%" preserveAspectRatio="none">
+  <defs>
+    <radialGradient id="caveBg" cx="50%" cy="50%" r="70%">
+      <stop offset="0%" stop-color="#2a231d"/>
+      <stop offset="60%" stop-color="#181310"/>
+      <stop offset="100%" stop-color="#090706"/>
+    </radialGradient>
+    <pattern id="caveRock" width="80" height="80" patternUnits="userSpaceOnUse">
+      <path d="M 0 0 L 35 15 L 20 45 L 60 55 L 80 80" stroke="#3d332a" stroke-width="1.5" fill="none" opacity="0.4"/>
+      <path d="M 80 0 L 50 30 L 70 65 L 10 75" stroke="#4a3e33" stroke-width="1" fill="none" opacity="0.3"/>
+      <circle cx="25" cy="20" r="3" fill="#140f0c" opacity="0.6"/>
+      <circle cx="65" cy="50" r="4" fill="#140f0c" opacity="0.6"/>
+    </pattern>
+  </defs>
+  <!-- Base background -->
+  <rect width="800" height="600" fill="url(#caveBg)"/>
+  <rect width="800" height="600" fill="url(#caveRock)"/>
+  <!-- Natural Cavern Formations & Stalagmites -->
+  <g fill="#1f1813" stroke="#4a3b2c" stroke-width="2" opacity="0.75">
+    <!-- North wall outcroppings -->
+    <path d="M 0 0 Q 150 70 300 20 T 600 60 L 800 10 L 800 0 Z"/>
+    <!-- South wall outcroppings -->
+    <path d="M 0 600 Q 200 530 450 570 T 750 540 L 800 600 Z"/>
+    <!-- East / West crags -->
+    <path d="M 0 150 Q 60 280 15 420 L 0 450 Z"/>
+    <path d="M 800 120 Q 740 260 780 440 L 800 480 Z"/>
+  </g>
+  <!-- Stalagmite clusters -->
+  <g fill="#3a2f24" stroke="#1c1611" stroke-width="1.5" opacity="0.8">
+    <polygon points="180,240 195,190 210,240"/>
+    <polygon points="200,245 215,205 230,245"/>
+    <polygon points="560,380 575,320 590,380"/>
+    <polygon points="580,390 595,340 610,390"/>
+    <polygon points="380,420 395,370 410,420"/>
+  </g>
+</svg>

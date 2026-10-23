@@ -795,4 +795,81 @@ describe("Tactical Maps & Combat Integration (BR-35..BR-50)", () => {
     expect(patchTokRes.body.token.avatarKey).toBe("legendary");
     expect(patchTokRes.body.token.imageUrl).toBe("/avatars/legendary.svg");
   });
+
+  it("GM manages custom map images, built-in map presets, and dimensions; non-GM players are rejected (BR-40, UC-40, UC-41)", async () => {
+    seq += 1;
+    const gmAgent = await registerAgent(`mapimg-gm-${seq}@test.dev`, "GM", "MapImg GM");
+    const playerAgent = await registerAgent(`mapimg-p-${seq}@test.dev`, "PLAYER", "MapImg Player");
+    const campaignId = (await createSystemCampaign(gmAgent, `MapImg Camp ${seq}`, "shadowdark")).id;
+    await joinPlayer(gmAgent, playerAgent, campaignId);
+
+    // 1. GET /api/maps/presets
+    const presetsRes = await gmAgent.get("/api/maps/presets");
+    expect(presetsRes.status).toBe(200);
+    expect(Array.isArray(presetsRes.body.presets)).toBe(true);
+    expect(presetsRes.body.presets.length).toBeGreaterThanOrEqual(6);
+    const keys = presetsRes.body.presets.map((p: any) => p.key);
+    expect(keys).toContain("cave");
+    expect(keys).toContain("tomb");
+    expect(keys).toContain("deep-tunnels");
+    expect(keys).toContain("ruins");
+    expect(keys).toContain("overland-hex");
+    expect(keys).toContain("settlement");
+
+    // Create session
+    const sessionRes = await gmAgent.post(`/api/campaigns/${campaignId}/sessions`).send({
+      name: "Map Image Session",
+    });
+    const sessionId = sessionRes.body.session.id;
+
+    // 2. GM creates map with built-in preset (tomb)
+    const mapWithPresetRes = await gmAgent.post(`/api/sessions/${sessionId}/maps`).send({
+      name: "Ancient Tomb Crypt",
+      presetKey: "tomb",
+      width: 16,
+      height: 12,
+    });
+    expect(mapWithPresetRes.status).toBe(201);
+    expect(mapWithPresetRes.body.map.presetKey).toBe("tomb");
+    expect(mapWithPresetRes.body.map.imageUrl).toBe("/map-presets/tomb.svg");
+    expect(mapWithPresetRes.body.map.width).toBe(16);
+    expect(mapWithPresetRes.body.map.height).toBe(12);
+    const mapId = mapWithPresetRes.body.map.id;
+
+    // 3. GM updates map with custom image URL and new dimensions
+    const updateMapRes = await gmAgent.patch(`/api/maps/${mapId}`).send({
+      name: "Ancient Tomb Catacombs",
+      imageUrl: "https://example.com/custom-catacombs.png",
+      width: 20,
+      height: 15,
+    });
+    expect(updateMapRes.status).toBe(200);
+    expect(updateMapRes.body.map.imageUrl).toBe("https://example.com/custom-catacombs.png");
+    expect(updateMapRes.body.map.width).toBe(20);
+    expect(updateMapRes.body.map.height).toBe(15);
+
+    // 4. GM creates second map with overland-hex preset
+    const hexMapRes = await gmAgent.post(`/api/sessions/${sessionId}/maps`).send({
+      name: "Wilderness Hex Map",
+      presetKey: "overland-hex",
+      width: 24,
+      height: 18,
+    });
+    expect(hexMapRes.status).toBe(201);
+    expect(hexMapRes.body.map.presetKey).toBe("overland-hex");
+    expect(hexMapRes.body.map.imageUrl).toBe("/map-presets/overland-hex.svg");
+
+    // 5. Player attempts to update map background -> 403 Forbidden
+    const playerPatchAttempt = await playerAgent.patch(`/api/maps/${mapId}`).send({
+      imageUrl: "https://example.com/hacked-map.png",
+    });
+    expect(playerPatchAttempt.status).toBe(403);
+
+    // 6. Player attempts to create a map -> 403 Forbidden
+    const playerCreateAttempt = await playerAgent.post(`/api/sessions/${sessionId}/maps`).send({
+      name: "Player Map",
+      presetKey: "ruins",
+    });
+    expect(playerCreateAttempt.status).toBe(403);
+  });
 });

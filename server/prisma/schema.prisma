@@ -145,6 +145,8 @@ model SessionMap {
   session             GameSession  @relation(fields: [sessionId], references: [id], onDelete: Cascade)
   name                String       @default("Dungeon Map")
   theme               String       @default("stone-dungeon")
+  imageUrl            String?
+  presetKey           String?
   width               Int          @default(12)
   height              Int          @default(8)
   allowPlayerMovement Boolean      @default(false)

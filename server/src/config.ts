@@ -35,4 +35,5 @@ export const config = {
   // Resolved from both src/ (tsx dev) and dist/ (built) — both are one level below server/.
   clientDist: process.env.CLIENT_DIST ?? path.resolve(here, "../../client/dist"),
   avatarsDir: path.resolve(here, "../../client/public/avatars"),
+  mapPresetsDir: path.resolve(here, "../../client/public/map-presets"),
 } as const;

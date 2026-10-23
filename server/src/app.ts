@@ -37,6 +37,9 @@ export function createApp(): express.Express {
   if (existsSync(config.avatarsDir)) {
     app.use("/avatars", express.static(config.avatarsDir));
   }
+  if (existsSync(config.mapPresetsDir)) {
+    app.use("/map-presets", express.static(config.mapPresetsDir));
+  }
 
   // In production (and E2E) the server serves the built client; in dev the
   // Vite dev server proxies /api here instead and this block is skipped.

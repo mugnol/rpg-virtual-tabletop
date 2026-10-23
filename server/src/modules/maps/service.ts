@@ -27,6 +27,7 @@ import {
   getPredefinedAvatar,
   resolveTokenAvatar,
 } from "../../rules/avatars.js";
+import { resolveMapPreset } from "../../rules/mapPresets.js";
 import type {
   CombatAttackInput,
   CombatNextInput,
@@ -158,11 +159,18 @@ export async function createSessionMap(
   const session = await findSessionWithCampaign(sessionId);
   assertOwner(session.campaign, userId);
 
+  const resolved = resolveMapPreset({
+    presetKey: input.presetKey,
+    imageUrl: input.imageUrl,
+  });
+
   const map = await prisma.sessionMap.create({
     data: {
       sessionId,
       name: input.name,
       theme: input.theme,
+      imageUrl: resolved.imageUrl,
+      presetKey: resolved.presetKey,
       width: input.width,
       height: input.height,
       allowPlayerMovement: input.allowPlayerMovement,
@@ -199,9 +207,25 @@ export async function updateMap(
   const map = await findMapWithSession(mapId);
   assertOwner(map.session.campaign, userId);
 
+  const updateData: Record<string, any> = {};
+  if (input.name !== undefined) updateData.name = input.name;
+  if (input.theme !== undefined) updateData.theme = input.theme;
+  if (input.width !== undefined) updateData.width = input.width;
+  if (input.height !== undefined) updateData.height = input.height;
+  if (input.allowPlayerMovement !== undefined) updateData.allowPlayerMovement = input.allowPlayerMovement;
+
+  if (input.imageUrl !== undefined || input.presetKey !== undefined) {
+    const resolved = resolveMapPreset({
+      presetKey: input.presetKey !== undefined ? input.presetKey : map.presetKey,
+      imageUrl: input.imageUrl !== undefined ? input.imageUrl : undefined,
+    });
+    updateData.imageUrl = resolved.imageUrl;
+    if (input.presetKey !== undefined) updateData.presetKey = input.presetKey;
+  }
+
   const updated = await prisma.sessionMap.update({
     where: { id: mapId },
-    data: input,
+    data: updateData,
     include: {
       tokens: true,
       combat: true,

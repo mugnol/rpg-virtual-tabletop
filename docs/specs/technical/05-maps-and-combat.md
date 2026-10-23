@@ -17,6 +17,8 @@ model SessionMap {
   session             GameSession  @relation(fields: [sessionId], references: [id], onDelete: Cascade)
   name                String       @default("Dungeon Map")
   theme               String       @default("stone-dungeon") // stone-dungeon | forest-clearing | tavern-cellar
+  imageUrl            String?
+  presetKey           String?
   width               Int          @default(12)
   height              Int          @default(8)
   allowPlayerMovement Boolean      @default(false)
@@ -200,6 +202,19 @@ export interface FormattedCombatState {
   - Accepts `{ partyLevel: number, rollCombat?: number, rollQuality?: number, rollStrength?: number, rollWeakness?: number, mutationRolls?: number[] }`.
   - Implements procedural d20 generation and optional d12 mutations table, returning a complete generated monster stat block.
   - Terminates combat and clears turn queue and timers.
+
+### 2.4 Map Presets & Custom Background Images (BR-40, UC-40, UC-41)
+- `GET /api/maps/presets`
+  - Returns `{ presets: MapPreset[] }` where each preset provides `key`, `name`, `category`, `url`, and `description`.
+  - Built-in SVG presets: `cave`, `tomb`, `deep-tunnels`, `ruins`, `overland-hex`, `settlement`.
+- `POST /api/sessions/:sessionId/maps` & `PATCH /api/maps/:id`
+  - Input extended to accept `imageUrl?: string` (URL or data URL) and `presetKey?: string`.
+  - Resolves predefined preset URLs when `presetKey` is supplied.
+  - GM-only authorization enforced; players receive 403.
+- `Client -> Server WS Message`:
+  - `switch_map`: `{ type: "switch_map", mapId }` allowing GM to switch the room's active map in real time.
+- `Server -> Client WS Broadcast`:
+  - `active_map_changed`: `{ type: "active_map_changed", mapId, map }` updating all connected clients' viewports.
 
 ---
 

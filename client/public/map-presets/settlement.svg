@@ -1,0 +1,33 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 600" width="100%" height="100%" preserveAspectRatio="none">
+  <defs>
+    <radialGradient id="settlementBg" cx="50%" cy="50%" r="70%">
+      <stop offset="0%" stop-color="#302820"/>
+      <stop offset="60%" stop-color="#1c1712"/>
+      <stop offset="100%" stop-color="#0d0a07"/>
+    </radialGradient>
+    <pattern id="cobblestones" width="50" height="50" patternUnits="userSpaceOnUse">
+      <rect x="1" y="1" width="48" height="48" fill="#241e18" stroke="#3d3329" stroke-width="1.2" rx="3"/>
+    </pattern>
+  </defs>
+  <rect width="800" height="600" fill="url(#settlementBg)"/>
+  <rect width="800" height="600" fill="url(#cobblestones)"/>
+  <!-- Street & Building Footprints -->
+  <g fill="#1a1410" stroke="#524436" stroke-width="2">
+    <!-- North-west tavern -->
+    <rect x="80" y="60" width="160" height="120" rx="4"/>
+    <rect x="95" y="75" width="60" height="40" fill="#29201a"/>
+    <!-- North-east blacksmith / forge -->
+    <rect x="560" y="60" width="160" height="110" rx="4"/>
+    <circle cx="680" cy="115" r="14" fill="#78350f" stroke="#b45309" stroke-width="2"/>
+    <!-- South-west guildhall -->
+    <rect x="80" y="380" width="180" height="150" rx="4"/>
+    <!-- South-east marketplace stalls -->
+    <rect x="560" y="400" width="70" height="50" rx="2" fill="#38281a"/>
+    <rect x="660" y="400" width="70" height="50" rx="2" fill="#38281a"/>
+    <rect x="560" y="480" width="70" height="50" rx="2" fill="#38281a"/>
+    <rect x="660" y="480" width="70" height="50" rx="2" fill="#38281a"/>
+    <!-- Central town square well / fountain -->
+    <circle cx="400" cy="300" r="28" fill="#1e293b" stroke="#64748b" stroke-width="3"/>
+    <circle cx="400" cy="300" r="16" fill="#0284c7" stroke="none"/>
+  </g>
+</svg>

@@ -1,0 +1,31 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 600" width="100%" height="100%" preserveAspectRatio="none">
+  <defs>
+    <radialGradient id="hexBg" cx="50%" cy="50%" r="75%">
+      <stop offset="0%" stop-color="#24331e"/>
+      <stop offset="60%" stop-color="#141c11"/>
+      <stop offset="100%" stop-color="#080c07"/>
+    </radialGradient>
+    <pattern id="hexGridPattern" width="60" height="104" patternUnits="userSpaceOnUse">
+      <path d="M 30 0 L 60 17.32 L 60 52 L 30 69.28 L 0 52 L 0 17.32 Z" fill="none" stroke="#3b5231" stroke-width="1" opacity="0.35"/>
+      <path d="M 30 52 L 60 69.28 L 60 104 L 30 121.28 L 0 104 L 0 69.28 Z" fill="none" stroke="#3b5231" stroke-width="1" opacity="0.35"/>
+    </pattern>
+  </defs>
+  <rect width="800" height="600" fill="url(#hexBg)"/>
+  <rect width="800" height="600" fill="url(#hexGridPattern)"/>
+  <!-- Mountain ridge & forest canopies -->
+  <g fill="#1a2416" stroke="#4d693f" stroke-width="2" opacity="0.75">
+    <!-- Mountain ridge in north-east -->
+    <polygon points="520,180 570,90 620,180"/>
+    <polygon points="590,190 640,110 690,190"/>
+    <polygon points="660,180 710,100 760,180"/>
+    <!-- River winding across map -->
+    <path d="M 0 120 Q 250 180 400 320 T 800 480" fill="none" stroke="#2563eb" stroke-width="8" opacity="0.6"/>
+  </g>
+  <!-- Tree clusters in south-west -->
+  <g fill="#2e4225" stroke="#1f2d19" stroke-width="1.5">
+    <circle cx="140" cy="420" r="26"/>
+    <circle cx="180" cy="450" r="30"/>
+    <circle cx="230" cy="420" r="24"/>
+    <circle cx="160" cy="480" r="22"/>
+  </g>
+</svg>

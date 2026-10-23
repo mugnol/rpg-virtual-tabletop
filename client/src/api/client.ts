@@ -579,11 +579,21 @@ export interface SessionMap {
   sessionId: string;
   name: string;
   theme: "stone-dungeon" | "forest-clearing" | "tavern-cellar" | string;
+  imageUrl?: string | null;
+  presetKey?: string | null;
   width: number;
   height: number;
   allowPlayerMovement: boolean;
   tokens: MapToken[];
   combat: CombatState | null;
+}
+
+export interface MapPreset {
+  key: string;
+  name: string;
+  category: "dungeon" | "wilderness" | "settlement";
+  url: string;
+  description: string;
 }
 
 export interface CombatAttackResult {
@@ -608,9 +618,21 @@ export function listSessionMaps(sessionId: string): Promise<{ maps: SessionMap[]
   return request("GET", `/sessions/${sessionId}/maps`);
 }
 
+export function listMapPresets(): Promise<{ presets: MapPreset[] }> {
+  return request("GET", "/maps/presets");
+}
+
 export function createSessionMap(
   sessionId: string,
-  input: { name?: string; theme?: string; width?: number; height?: number; allowPlayerMovement?: boolean },
+  input: {
+    name?: string;
+    theme?: string;
+    imageUrl?: string | null;
+    presetKey?: string | null;
+    width?: number;
+    height?: number;
+    allowPlayerMovement?: boolean;
+  },
 ): Promise<{ map: SessionMap }> {
   return request("POST", `/sessions/${sessionId}/maps`, input);
 }
@@ -621,7 +643,15 @@ export function getMap(mapId: string): Promise<{ map: SessionMap }> {
 
 export function updateMap(
   mapId: string,
-  input: { name?: string; theme?: string; width?: number; height?: number; allowPlayerMovement?: boolean },
+  input: {
+    name?: string;
+    theme?: string;
+    imageUrl?: string | null;
+    presetKey?: string | null;
+    width?: number;
+    height?: number;
+    allowPlayerMovement?: boolean;
+  },
 ): Promise<{ map: SessionMap }> {
   return request("PATCH", `/maps/${mapId}`, input);
 }

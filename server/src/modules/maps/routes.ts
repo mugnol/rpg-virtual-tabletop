@@ -2,6 +2,7 @@ import { Router } from "express";
 import { asyncHandler, parseBody } from "../../lib/http.js";
 import { requireAuth } from "../../middleware/auth.js";
 import { getPredefinedAvatars } from "../../rules/avatars.js";
+import { getMapPresets } from "../../rules/mapPresets.js";
 import {
   combatAttackSchema,
   combatNextSchema,
@@ -63,6 +64,14 @@ sessionMapsRouter.post(
 // Maps Router (mounted at /api/maps)
 export const mapsRouter = Router();
 mapsRouter.use(requireAuth);
+
+mapsRouter.get(
+  "/presets",
+  asyncHandler(async (_req, res) => {
+    const presets = getMapPresets();
+    res.json({ presets });
+  }),
+);
 
 mapsRouter.get(
   "/:id",

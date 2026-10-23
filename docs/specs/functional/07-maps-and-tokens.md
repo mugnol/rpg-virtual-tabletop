@@ -69,6 +69,29 @@ Tokens placed on the map belong to one of three types:
 - **Rendering**:
   - Avatars render inside the circular tactical map tokens and as a visual thumbnail inside the Campaign Turn Queue list (`turn-queue-list`).
 
+### BR-40: Custom Campaign Map Images & Built-in Map Presets
+- Each `SessionMap` can have an associated background image specified by `imageUrl` (external URL or Data URL) and `presetKey` (referencing bundled vector map presets).
+- Built-in map presets inspired by Shadowdark Core Rulebook (pgs. 130–135):
+  - `cave`: Natural cavern formations, underground stone textures.
+  - `tomb`: Crypt sarcophagi and ancient burial chambers.
+  - `deep-tunnels`: Labyrinthine underground passageways and dark veins.
+  - `ruins`: Fallen masonry, cracked flagstones, and overgrown rubble.
+  - `overland-hex`: Overland hex wilderness exploration backdrop.
+  - `settlement`: Village/town district streets, tavern clusters, and marketplace layout.
+- **GM Map Image Management**:
+  - The Campaign Admin (GM) can set or update a map's background image via:
+    1. Selecting a built-in map preset (`data-testid="map-preset-picker"` / `data-testid="map-preset-option-${key}"`),
+    2. Providing a custom image URL (`data-testid="map-image-url-input"`), or
+    3. Uploading a custom image file via client-side `FileReader` data URL (`data-testid="map-image-file-input"`).
+- **Tactical Canvas Rendering & Grid Alignment**:
+  - The active map's `imageUrl` renders as the background layer of the tactical canvas (`data-testid="map-background-image"`) while keeping grid cells, tokens (`token-image-${token.id}`), movement highlights, and combat overlays aligned on top.
+  - The GM can configure or update grid dimensions (`width`, `height`) and background image at map creation or via `PATCH /api/maps/:mapId`.
+- **Multiple Maps & Real-Time Synchronization**:
+  - Sessions support multiple maps per campaign. The GM can create new maps and switch the active map in real time.
+  - Map updates and active map switches broadcast immediately via WebSockets (`map_updated` / `active_map_changed`) so all connected session participants immediately view the new background image and layout without refreshing the page.
+- **Security & Authorization**:
+  - Only the campaign GM can create, update, or switch maps. Requests from non-GM players are rejected with `403 FORBIDDEN`.
+
 ---
 
 ## 3. Use Cases (UC)
@@ -111,3 +134,14 @@ Tokens placed on the map belong to one of three types:
 1. When placing or configuring a token, GM (or player for owned character tokens) views the avatar picker gallery containing predefined class and monster avatars.
 2. User clicks a predefined avatar option or types a custom image URL.
 3. Token updates in real time and renders the chosen avatar image on both the tactical map cell and in the Campaign Turn Queue list.
+
+### UC-40: GM Configures Custom Map Image & Built-in Presets
+1. When creating or editing a map, GM opens the map settings modal / creation dialog.
+2. GM selects a built-in map preset from the preset picker (`data-testid="map-preset-picker"`, `data-testid="map-preset-option-${key}"`), inputs a custom external image URL (`data-testid="map-image-url-input"`), or uploads a custom image file (`data-testid="map-image-file-input"`).
+3. The server updates the map configuration and broadcasts the update.
+4. The tactical canvas immediately renders the chosen image as the background layer (`data-testid="map-background-image"`), with the grid, tokens, and combat highlights aligned on top.
+
+### UC-41: GM Creates Multiple Maps & Switches Active Map in Real Time
+1. GM creates additional maps within a session room for different campaign encounter sites (e.g., Tomb, Ruins, Overland Hex).
+2. GM switches between maps using the map selector control (`data-testid="map-selector"`).
+3. The server broadcasts the active map switch via WebSockets (`active_map_changed`), and all connected players' viewports seamlessly transition to the selected map without page refresh.

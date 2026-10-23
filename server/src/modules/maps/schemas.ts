@@ -3,6 +3,8 @@ import { z } from "zod";
 export const mapCreateSchema = z.object({
   name: z.string().trim().min(1).max(100).default("Dungeon Map"),
   theme: z.enum(["stone-dungeon", "forest-clearing", "tavern-cellar"]).default("stone-dungeon"),
+  imageUrl: z.string().trim().max(1000000).nullable().optional(),
+  presetKey: z.string().trim().max(100).nullable().optional(),
   width: z.number().int().min(4).max(64).default(12),
   height: z.number().int().min(4).max(64).default(8),
   allowPlayerMovement: z.boolean().default(false),
@@ -11,6 +13,8 @@ export const mapCreateSchema = z.object({
 export const mapUpdateSchema = z.object({
   name: z.string().trim().min(1).max(100).optional(),
   theme: z.enum(["stone-dungeon", "forest-clearing", "tavern-cellar"]).optional(),
+  imageUrl: z.string().trim().max(1000000).nullable().optional(),
+  presetKey: z.string().trim().max(100).nullable().optional(),
   width: z.number().int().min(4).max(64).optional(),
   height: z.number().int().min(4).max(64).optional(),
   allowPlayerMovement: z.boolean().optional(),
