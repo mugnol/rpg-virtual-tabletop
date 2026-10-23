@@ -2187,6 +2187,7 @@ export function generateRandomShadowdarkCharacter(options?: {
 }
 
 export interface ShadowdarklingsCharacterJson {
+  [key: string]: unknown;
   name: string;
   stats: {
     STR: number;

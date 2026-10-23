@@ -168,6 +168,7 @@ Campaign turn queue synchronization, active player End Turn, GM Previous Turn, r
 
     # GM creates session and places CHARACTER and MONSTER tokens
     Switch Context    ${gm_ctx}
+    Go To    ${HOME}
     Click Campaign Named    Turn Queue Campaign
     Click TestID    session-create-button
     Fill TestID    session-name-input    Crypt Encounter
@@ -268,6 +269,7 @@ Shadowdark initiative system, surprise toggles, grouped monster initiative, Chao
 
     # GM creates session and places CHARACTER and MONSTER tokens
     Switch Context    ${gm_ctx}
+    Go To    ${HOME}
     Click Campaign Named    Initiative Campaign
     Click TestID    session-create-button
     Fill TestID    session-name-input    Ambush Room
@@ -285,12 +287,14 @@ Shadowdark initiative system, surprise toggles, grouped monster initiative, Chao
     Fill TestID    token-name-input    Ambush Spider
     Fill TestID    token-hp-input    12
     Fill TestID    token-ac-input    12
+    Fill TestID    token-attack-bonus-input    3
+    Fill TestID    token-damage-input    1d6
     Click TestID    token-submit-button
 
     # GM starts combat and verifies initiative badges, surprise toggle, grouped monster toggle, and Chaos Mode toggle
     Click TestID    combat-start-button
     TestID Should Be Visible    combat-tracker
-    TestID Should Be Visible    turn-queue-initiative
+    Get Element    css=[data-testid="turn-queue-initiative"] >> nth=0
     TestID Should Be Visible    roll-initiative-button
     TestID Should Be Visible    chaos-mode-toggle
     TestID Should Be Visible    group-monster-initiative-toggle
@@ -338,6 +342,7 @@ GM manual turn queue reorganization, move up and down controls, and freeform mod
 
     # GM creates session and places CHARACTER and 2 MONSTER tokens
     Switch Context    ${gm_ctx}
+    Go To    ${HOME}
     Click Campaign Named    Reorder Campaign
     Click TestID    session-create-button
     Fill TestID    session-name-input    Reorder Arena
@@ -355,6 +360,8 @@ GM manual turn queue reorganization, move up and down controls, and freeform mod
     Fill TestID    token-name-input    Minotaur
     Fill TestID    token-hp-input    30
     Fill TestID    token-ac-input    14
+    Fill TestID    token-attack-bonus-input    5
+    Fill TestID    token-damage-input    1d10+3
     Click TestID    token-submit-button
 
     Click TestID    token-add-button
@@ -362,6 +369,8 @@ GM manual turn queue reorganization, move up and down controls, and freeform mod
     Fill TestID    token-name-input    Harpy
     Fill TestID    token-hp-input    15
     Fill TestID    token-ac-input    11
+    Fill TestID    token-attack-bonus-input    2
+    Fill TestID    token-damage-input    1d6
     Click TestID    token-submit-button
 
     # GM starts combat
@@ -375,8 +384,8 @@ GM manual turn queue reorganization, move up and down controls, and freeform mod
     # Verify GM can see move up / down buttons on turn queue items
     ${first_item}=    Get Element    css=[data-testid="turn-queue-item"]:first-child
     ${second_item}=    Get Element    css=[data-testid="turn-queue-item"]:nth-child(2)
-    Get Element    css=[data-testid^="turn-queue-move-down-"]
-    Get Element    css=[data-testid^="turn-queue-move-up-"]
+    Get Element    css=[data-testid^="turn-queue-move-down-"] >> nth=0
+    Get Element    css=[data-testid^="turn-queue-move-up-"] >> nth=0
 
     # Player views same room
     Switch Context    ${player_ctx}
