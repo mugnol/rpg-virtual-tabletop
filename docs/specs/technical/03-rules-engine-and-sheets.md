@@ -185,6 +185,11 @@ Encapsulates all tables, formulas, and rules from `Shadowdark RPG - V4-7.txt`:
 - **Gear, Slots, Armor & Weapons**: `SHADOWDARK_BASIC_GEAR`, `SHADOWDARK_CRAWLING_KIT`, `SHADOWDARK_ARMOR`, `SHADOWDARK_WEAPONS` (all 15 weapons with cost, type `M`/`R`/`M/R`, range `C`/`N`/`F`, damage, versatile damage, gear slots, properties `F`/`L`/`Th`/`2H`/`V`), `calculateShadowdarkGearSlots(params)`, `computeWeaponAttackBonusAndDamage(params)`.
 - **Magic, Focus, Penance & Mishaps**: `SHADOWDARK_SPELLS` (all Priest & Wizard spells Tiers 1–5), `PRIEST_SPELLS_KNOWN_BY_TIER`, `WIZARD_SPELLS_KNOWN_BY_TIER`, `PRIEST_PENANCE_SACRIFICE_GP` (`1:5, 2:20, 3:40, 4:90, 5:150`), `WIZARD_MISHAP_TABLES` (`tier1_2`, `tier3_4`, `tier5` with automatic Devastation! roll-twice-and-combine on 1), `resolveSpellcastingCheck(params)`, `resolveFocusCheck(params)`, `resolveScrollOrWandCast(params)`, `resolveLearnSpellFromScroll(params)`.
 - **Gameplay, Light, Combat, Dying, Rest, Carousing, Wizards & Thieves, XP & Modes**: `SHADOWDARK_DCS` (`easy: 9, normal: 12, hard: 15, extreme: 18`), `rollD6Decider(roll)`, `manageLightSource(params)`, `rollLightMishap(roll)`, `rollMoraleCheck(params)`, `rollDeathTimer(params)`, `rollDyingTurn(params)`, `resolveStabilizeCheck(params)`, `resolveRest(params)`, `resolveCarousing(params)`, `playWizardsAndThievesTurn(params)`, `awardTreasureQualityXp(quality)`, `computeHunterModeMonsterXp(monsterLevel)`.
+- **Monster Compendium, Procedural Generation & "Make It Weird" Mutations (pgs. 187–266)**:
+  - `SHADOWDARK_MONSTERS`: Catalog of all official Shadowdark monsters with stats (`ac`, `hp`, `attacks`, `movement`, `modifiers`, `level`, `alignment`, `darkAdapted`, `spells`, `features`).
+  - `SHADOWDARK_COMBAT_ROLES`: Presets (`Mook`, `Soldier`, `Striker`, `Tank`, `Controller`, `Legendary`) providing role-based attribute formulas.
+  - `SHADOWDARK_PROCEDURAL_TABLES`: Procedural d20 tables (Combat `PL - 3` to `PL + 4`, Quality, Strength, Weakness) and d12 Mutation tables (Mutation 1, 2, and 3).
+  - `generateProceduralMonster(options)`: Function to generate randomized or deterministic procedural monsters scaled by `partyLevel` (`PL`).
 - **Shadowdarklings JSON Parity**: `exportToShadowdarklings(sheet, config)` and `importFromShadowdarklings(doc)`.
 
 ## 6. Permissions Matrix (integration-test checklist, append to `02` §4)

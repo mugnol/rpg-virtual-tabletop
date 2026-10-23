@@ -4,12 +4,15 @@ import {
   getSession,
   listCampaignSheets,
   listSessionMaps,
+  listMonsters,
+  generateMonster,
   type DiceRollResult,
   type GameSession,
   type MapToken,
   type SessionMap,
   type SessionMessageItem,
   type SheetSummary,
+  type MonsterSummary,
 } from "../api/client";
 import { useAuth } from "../auth/AuthContext";
 import { FormError } from "../components/FormError";
@@ -58,6 +61,20 @@ export function SessionRoomPage() {
   const [tokenAc, setTokenAc] = useState<string>("");
   const [tokenAttackBonus, setTokenAttackBonus] = useState<string>("");
   const [tokenDamage, setTokenDamage] = useState<string>("");
+
+  // Monster token creation state
+  const [monsterMode, setMonsterMode] = useState<"compendium" | "generic" | "procedural" | "custom">("compendium");
+  const [compendiumMonsters, setCompendiumMonsters] = useState<MonsterSummary[]>([]);
+  const [selectedMonsterKey, setSelectedMonsterKey] = useState<string>("");
+  const [monsterSearch, setMonsterSearch] = useState<string>("");
+  const [monsterFilterLevel, setMonsterFilterLevel] = useState<string>("");
+  const [monsterFilterAlignment, setMonsterFilterAlignment] = useState<string>("");
+  const [monsterRole, setMonsterRole] = useState<string>("Soldier");
+  const [monsterLevel, setMonsterLevel] = useState<string>("1");
+  const [monsterPartyLevel, setMonsterPartyLevel] = useState<string>("1");
+  const [monsterDexModifier, setMonsterDexModifier] = useState<number>(0);
+  const [monsterSpeed, setMonsterSpeed] = useState<number>(6);
+  const [proceduralSummary, setProceduralSummary] = useState<string>("");
 
   // Chat input
   const [chatInput, setChatInput] = useState("");
@@ -378,6 +395,96 @@ export function SessionRoomPage() {
         .then(({ sheets }) => setCampaignSheets(sheets))
         .catch(() => {});
     }
+    listMonsters()
+      .then((res) => {
+        setCompendiumMonsters(res.monsters);
+        if (res.monsters.length > 0 && !selectedMonsterKey) {
+          const first = res.monsters.find((x) => x.id === "goblin") ?? res.monsters[0];
+          if (first) {
+            handleSelectCompendiumMonster(first.id, res.monsters);
+          }
+        }
+      })
+      .catch(() => {});
+  }
+
+  function handleSelectCompendiumMonster(monsterId: string, listOverride?: MonsterSummary[]) {
+    setSelectedMonsterKey(monsterId);
+    const list = listOverride ?? compendiumMonsters;
+    const m = list.find((x) => x.id === monsterId);
+    if (m) {
+      setTokenName(m.name);
+      setTokenHp(String(m.hp));
+      setTokenAc(String(m.ac));
+      setTokenAttackBonus(String(m.attacks[0]?.bonus ?? m.level));
+      setTokenDamage(m.attacks[0]?.damage ?? "1d6");
+      setMonsterDexModifier(m.modifiers.dex);
+      setMonsterSpeed(m.movement.toLowerCase().includes("double") ? 12 : 6);
+    }
+  }
+
+  function handleRoleOrLevelChange(newRole: string, newLevel: number) {
+    setMonsterRole(newRole);
+    setMonsterLevel(String(newLevel));
+    const lvl = Math.max(0, newLevel);
+    let ac = 11 + Math.ceil(lvl / 2);
+    let hp = Math.max(4, Math.round(lvl * 4.5));
+    let atk = lvl;
+    let dmg = "1d8";
+
+    if (newRole === "Mook") {
+      ac = Math.max(10, 10 + Math.floor(lvl / 3));
+      hp = Math.max(1, Math.round(lvl * 3));
+      atk = Math.max(0, lvl - 1);
+      dmg = lvl >= 4 ? "1d6" : "1d4";
+    } else if (newRole === "Striker") {
+      ac = Math.max(10, 10 + Math.floor(lvl / 2) - 1);
+      hp = Math.max(3, Math.round(lvl * 3.5));
+      atk = lvl + 1;
+      dmg = "1d10";
+    } else if (newRole === "Tank") {
+      ac = Math.max(13, 13 + Math.floor(lvl / 2));
+      hp = Math.max(6, Math.round(lvl * 6));
+      atk = lvl;
+      dmg = "1d8";
+    } else if (newRole === "Controller") {
+      ac = Math.max(11, 11 + Math.floor(lvl / 3));
+      hp = Math.max(4, Math.round(lvl * 4));
+      atk = lvl;
+      dmg = "1d6";
+    } else if (newRole === "Legendary") {
+      ac = Math.max(14, 14 + Math.floor(lvl / 2));
+      hp = Math.max(10, Math.round(lvl * 9));
+      atk = lvl + 2;
+      dmg = "2d8";
+    }
+
+    setTokenHp(String(hp));
+    setTokenAc(String(ac));
+    setTokenAttackBonus(String(atk));
+    setTokenDamage(dmg);
+  }
+
+  async function handleGenerateProceduralMonster() {
+    try {
+      const pl = Number.parseInt(monsterPartyLevel, 10) || 1;
+      const res = await generateMonster({ partyLevel: pl });
+      const m = res.monster;
+      setTokenName(m.name);
+      setTokenHp(String(m.hp));
+      setTokenAc(String(m.ac));
+      setTokenAttackBonus(String(m.attackBonus));
+      setTokenDamage(m.damageFormula);
+      setMonsterDexModifier(m.dexModifier);
+      setMonsterSpeed(m.movement.toLowerCase().includes("double") ? 12 : 6);
+      const parts = [`Quality: ${m.quality}`, `Strength: ${m.strength}`, `Weakness: ${m.weakness}`];
+      if (m.mutations && m.mutations.length > 0) {
+        parts.push(`Mutations: ${m.mutations.join(", ")}`);
+      }
+      setProceduralSummary(parts.join(" | "));
+    } catch {
+      // fallback
+    }
   }
 
   function handleSheetSelect(e: React.ChangeEvent<HTMLSelectElement>) {
@@ -414,11 +521,16 @@ export function SessionRoomPage() {
           token: {
             type: "MONSTER",
             name: tokenName || "Monster",
+            monsterKey: monsterMode === "compendium" && selectedMonsterKey ? selectedMonsterKey : undefined,
+            monsterRole: monsterMode === "generic" ? monsterRole : undefined,
+            level: monsterMode === "generic" ? Number.parseInt(monsterLevel, 10) || 1 : undefined,
             hpMax: Number.parseInt(tokenHp, 10) || 10,
             hpCurrent: Number.parseInt(tokenHp, 10) || 10,
             ac: Number.parseInt(tokenAc, 10) || 10,
             attackBonus: Number.parseInt(tokenAttackBonus, 10) || 0,
             damageFormula: tokenDamage || "1d6",
+            dexModifier: monsterDexModifier,
+            speed: monsterSpeed || 6,
           },
         }),
       );
@@ -717,6 +829,19 @@ export function SessionRoomPage() {
   );
   const potentialTargets = map ? map.tokens.filter((t) => t.type !== "ITEM") : [];
   const selectedToken = map?.tokens.find((t) => t.id === selectedTokenId) ?? null;
+
+  const filteredCompendiumMonsters = compendiumMonsters.filter((m) => {
+    if (monsterSearch && !m.name.toLowerCase().includes(monsterSearch.toLowerCase())) {
+      return false;
+    }
+    if (monsterFilterLevel && m.level !== Number.parseInt(monsterFilterLevel, 10)) {
+      return false;
+    }
+    if (monsterFilterAlignment && m.alignment !== monsterFilterAlignment) {
+      return false;
+    }
+    return true;
+  });
 
   // Build live Turn Queue items from combat.turnOrder + map.tokens
   const turnQueueItems = (map?.combat?.turnOrder ?? [])
@@ -1365,6 +1490,161 @@ export function SessionRoomPage() {
 
               {tokenType === "MONSTER" && (
                 <>
+                  <div className="form-group">
+                    <label>Monster Creation Mode</label>
+                    <select
+                      data-testid="monster-mode-select"
+                      value={monsterMode}
+                      onChange={(e) => setMonsterMode(e.target.value as any)}
+                    >
+                      <option value="compendium">Compendium (Official Shadowdark Catalog)</option>
+                      <option value="generic">Generic Monster (Combat Roles Preset)</option>
+                      <option value="procedural">Procedural Generator ("Make It Weird")</option>
+                      <option value="custom">Custom / Manual Stats</option>
+                    </select>
+                  </div>
+
+                  {monsterMode === "compendium" && (
+                    <>
+                      <div className="form-group">
+                        <label>Search Monster Catalog</label>
+                        <input
+                          data-testid="monster-compendium-search"
+                          type="text"
+                          value={monsterSearch}
+                          onChange={(e) => setMonsterSearch(e.target.value)}
+                          placeholder="Search monsters by name..."
+                        />
+                      </div>
+                      <div style={{ display: "flex", gap: "0.5rem", marginBottom: "0.75rem" }}>
+                        <div style={{ flex: 1 }}>
+                          <label style={{ fontSize: "0.85rem" }}>Level Filter</label>
+                          <select
+                            data-testid="monster-compendium-filter-level"
+                            value={monsterFilterLevel}
+                            onChange={(e) => setMonsterFilterLevel(e.target.value)}
+                            style={{ width: "100%", padding: "0.4rem" }}
+                          >
+                            <option value="">All Levels</option>
+                            {Array.from({ length: 17 }, (_, i) => (
+                              <option key={i} value={String(i)}>
+                                Level {i}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                        <div style={{ flex: 1 }}>
+                          <label style={{ fontSize: "0.85rem" }}>Alignment Filter</label>
+                          <select
+                            data-testid="monster-compendium-filter-alignment"
+                            value={monsterFilterAlignment}
+                            onChange={(e) => setMonsterFilterAlignment(e.target.value)}
+                            style={{ width: "100%", padding: "0.4rem" }}
+                          >
+                            <option value="">All Alignments</option>
+                            <option value="Lawful">Lawful</option>
+                            <option value="Neutral">Neutral</option>
+                            <option value="Chaotic">Chaotic</option>
+                          </select>
+                        </div>
+                      </div>
+                      <div className="form-group">
+                        <label>Select Shadowdark Monster ({filteredCompendiumMonsters.length} available)</label>
+                        <select
+                          data-testid="monster-compendium-select"
+                          value={selectedMonsterKey}
+                          onChange={(e) => handleSelectCompendiumMonster(e.target.value)}
+                        >
+                          <option value="">-- Choose Monster --</option>
+                          {filteredCompendiumMonsters.map((m) => (
+                            <option key={m.id} value={m.id}>
+                              {m.name} (LV {m.level}, AC {m.ac}, HP {m.hp}, {m.alignment})
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                    </>
+                  )}
+
+                  {monsterMode === "generic" && (
+                    <>
+                      <div style={{ display: "flex", gap: "0.5rem", marginBottom: "0.75rem" }}>
+                        <div style={{ flex: 2 }}>
+                          <label style={{ fontSize: "0.85rem" }}>Combat Role Preset (pg. 192)</label>
+                          <select
+                            data-testid="monster-role-select"
+                            value={monsterRole}
+                            onChange={(e) =>
+                              handleRoleOrLevelChange(
+                                e.target.value,
+                                Number.parseInt(monsterLevel, 10) || 1,
+                              )
+                            }
+                            style={{ width: "100%", padding: "0.4rem" }}
+                          >
+                            <option value="Mook">Mook (Swarm/Fodder)</option>
+                            <option value="Soldier">Soldier (Balanced)</option>
+                            <option value="Striker">Striker (High Damage)</option>
+                            <option value="Tank">Tank (High AC & HP)</option>
+                            <option value="Controller">Controller (Tactical)</option>
+                            <option value="Legendary">Legendary (Boss)</option>
+                          </select>
+                        </div>
+                        <div style={{ flex: 1 }}>
+                          <label style={{ fontSize: "0.85rem" }}>Monster Level</label>
+                          <input
+                            data-testid="monster-level-input"
+                            type="number"
+                            min="0"
+                            max="20"
+                            value={monsterLevel}
+                            onChange={(e) =>
+                              handleRoleOrLevelChange(
+                                monsterRole,
+                                Number.parseInt(e.target.value, 10) || 0,
+                              )
+                            }
+                            style={{ width: "100%", padding: "0.4rem" }}
+                          />
+                        </div>
+                      </div>
+                    </>
+                  )}
+
+                  {monsterMode === "procedural" && (
+                    <>
+                      <div style={{ display: "flex", gap: "0.5rem", alignItems: "flex-end", marginBottom: "0.75rem" }}>
+                        <div style={{ flex: 1 }}>
+                          <label style={{ fontSize: "0.85rem" }}>Average Party Level (PL)</label>
+                          <input
+                            data-testid="monster-party-level-input"
+                            type="number"
+                            min="1"
+                            max="20"
+                            value={monsterPartyLevel}
+                            onChange={(e) => setMonsterPartyLevel(e.target.value)}
+                            style={{ width: "100%", padding: "0.4rem" }}
+                          />
+                        </div>
+                        <div>
+                          <button
+                            data-testid="monster-generate-button"
+                            type="button"
+                            className="btn btn-secondary"
+                            onClick={handleGenerateProceduralMonster}
+                          >
+                            🎲 Generate Monster (pg. 190)
+                          </button>
+                        </div>
+                      </div>
+                      {proceduralSummary && (
+                        <div style={{ fontSize: "0.85rem", opacity: 0.85, marginBottom: "0.75rem", fontStyle: "italic" }}>
+                          {proceduralSummary}
+                        </div>
+                      )}
+                    </>
+                  )}
+
                   <div className="form-group">
                     <label>Name</label>
                     <input

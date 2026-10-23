@@ -37,6 +37,9 @@ export const tokenCreateSchema = z.object({
   initiative: z.number().int().optional(),
   dexModifier: z.number().int().optional(),
   hasSurprise: z.boolean().optional(),
+  monsterKey: z.string().optional(),
+  monsterRole: z.string().optional(),
+  level: z.number().int().optional(),
 });
 
 export const tokenUpdateSchema = z.object({
@@ -53,6 +56,9 @@ export const tokenUpdateSchema = z.object({
   initiative: z.number().int().optional(),
   dexModifier: z.number().int().optional(),
   hasSurprise: z.boolean().optional(),
+  monsterKey: z.string().optional(),
+  monsterRole: z.string().optional(),
+  level: z.number().int().optional(),
 });
 
 export const combatStartSchema = z.object({

@@ -401,3 +401,46 @@ GM manual turn queue reorganization, move up and down controls, and freeform mod
     Switch Context    ${gm_ctx}
     Click TestID    combat-end-button
     Wait For Elements State    css=[data-testid="combat-tracker"]    hidden
+
+GM places monster tokens via Compendium selector, Generic Combat Role preset, and Procedural Generator
+    Register Via UI    monster-gm-${TS}@e2e.test    gm    Bestiary GM
+    Create System Campaign Via UI    Bestiary Dungeon    shadowdark
+
+    Click TestID    session-create-button
+    Fill TestID    session-name-input    Monster Chamber
+    Click TestID    session-create-submit
+    Click    css=[data-testid="session-item"]:has-text("Monster Chamber")
+    TestID Should Be Visible    page-session
+    TestID Should Be Visible    map-board
+
+    # 1. Place Monster from Compendium (Goblin)
+    Click TestID    token-add-button
+    Select Options By    css=[data-testid="token-type-select"]    value    MONSTER
+    TestID Should Be Visible    monster-mode-select
+    Select Options By    css=[data-testid="monster-mode-select"]    value    compendium
+    TestID Should Be Visible    monster-compendium-select
+    Select Options By    css=[data-testid="monster-compendium-select"]    value    goblin
+    Click TestID    token-submit-button
+    Get Element    css=[data-testid="token-name"]:has-text("Goblin")
+
+    # 2. Place Generic Monster with Combat Role (Tank)
+    Click TestID    token-add-button
+    Select Options By    css=[data-testid="token-type-select"]    value    MONSTER
+    Select Options By    css=[data-testid="monster-mode-select"]    value    generic
+    TestID Should Be Visible    monster-role-select
+    Fill TestID    token-name-input    Dungeon Brute
+    Select Options By    css=[data-testid="monster-role-select"]    value    Tank
+    Fill TestID    monster-level-input    3
+    Click TestID    token-submit-button
+    Get Element    css=[data-testid="token-name"]:has-text("Dungeon Brute")
+
+    # 3. Place Procedural Monster ("Make It Weird")
+    Click TestID    token-add-button
+    Select Options By    css=[data-testid="token-type-select"]    value    MONSTER
+    Select Options By    css=[data-testid="monster-mode-select"]    value    procedural
+    TestID Should Be Visible    monster-party-level-input
+    Fill TestID    monster-party-level-input    3
+    Click TestID    monster-generate-button
+    Click TestID    token-submit-button
+    Get Element    css=[data-testid="token-name"] >> nth=2
+

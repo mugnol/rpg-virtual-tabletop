@@ -72,8 +72,11 @@ Tokens placed on the map belong to one of three types:
 ### UC-35: GM Places Tokens
 1. GM clicks "Add Token", selects type (`CHARACTER`, `MONSTER`, or `ITEM`).
 2. For `CHARACTER`, GM can pick an existing campaign character sheet; name, stats, and owner are auto-populated.
-3. For `MONSTER`, GM enters name, HP, AC, attack bonus, and damage formula.
-4. GM places the token at coordinate `(x, y)`. Token appears on all screens.
+3. For `MONSTER`, GM can select one of three creation modes:
+   - **Compendium**: Search and filter from the complete Shadowdark Monster Catalog by name, level, or alignment. Selecting an entry auto-populates `name`, `hpMax`, `hpCurrent`, `ac`, `attackBonus`, `damageFormula`, `dexModifier` (for initiative), and attacks/traits.
+   - **Generic / Combat Role**: Choose custom name, level, and optional Combat Role preset (`Mook`, `Soldier`, `Striker`, `Tank`, `Controller`, `Legendary` per pg. 192), which auto-calculates recommended AC, HP, attack bonus, and damage dice based on monster level.
+   - **Procedural Generator ("Make It Weird")**: Set average Party Level (`PL`) and generate a procedural monster (Combat `PL - 3` to `PL + 4`, `AC = PL + 10`, `1d4` attacks, `1d8` damage, Quality d20, Strength d20, Weakness d20) with optional d12 mutations (Mutation 1, 2, and 3).
+4. GM places the token at coordinate `(x, y)`. Token appears on all screens and integrates into the turn queue if combat is active.
 
 ### UC-36: Player Moves Owned Character
 1. Player clicks their character token on the grid.

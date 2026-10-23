@@ -19,6 +19,10 @@ import {
   type TurnQueueEntry,
 } from "../combat/combat.js";
 import { findSessionWithCampaign } from "../sessions/service.js";
+import {
+  computeMonsterStatsFromRole,
+  getShadowdarkMonster,
+} from "../../rules/shadowdarkMonsters.js";
 import type {
   CombatAttackInput,
   CombatNextInput,
@@ -247,6 +251,31 @@ export async function placeToken(
   let dexModifier = input.dexModifier ?? input.initiative ?? 0;
   let initiative = input.initiative ?? dexModifier;
   let hasAdvantage = false;
+  let speed = input.speed ?? 6;
+
+  if (input.type === "MONSTER") {
+    if (input.monsterKey) {
+      const monster = getShadowdarkMonster(input.monsterKey);
+      if (monster) {
+        name = input.name ?? monster.name;
+        hpMax = input.hpMax ?? monster.hp;
+        hpCurrent = input.hpCurrent ?? hpMax;
+        ac = input.ac ?? monster.ac;
+        dexModifier = input.dexModifier ?? monster.modifiers.dex;
+        initiative = input.initiative ?? dexModifier;
+        attackBonus = input.attackBonus ?? (monster.attacks[0]?.bonus ?? monster.level);
+        damageFormula = input.damageFormula ?? (monster.attacks[0]?.damage ?? "1d6");
+        speed = input.speed ?? monster.speed ?? (monster.movement.toLowerCase().includes("double") ? 12 : 6);
+      }
+    } else if (input.monsterRole) {
+      const roleStats = computeMonsterStatsFromRole(input.monsterRole as any, input.level ?? 1);
+      hpMax = input.hpMax ?? roleStats.hp;
+      hpCurrent = input.hpCurrent ?? hpMax;
+      ac = input.ac ?? roleStats.ac;
+      attackBonus = input.attackBonus ?? roleStats.attackBonus;
+      damageFormula = input.damageFormula ?? roleStats.damageFormula;
+    }
+  }
 
   if (input.type === "CHARACTER" && input.characterSheetId) {
     const sheet = await prisma.characterSheet.findUnique({
@@ -320,7 +349,7 @@ export async function placeToken(
       hpMax,
       hpCurrent,
       ac,
-      speed: input.speed ?? 6,
+      speed,
       attackBonus,
       damageFormula,
       initiative,

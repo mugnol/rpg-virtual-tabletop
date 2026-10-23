@@ -770,5 +770,80 @@ export function updateUserPreferences(preferences: {
   return request("PATCH", "/users/me/preferences", preferences);
 }
 
+export interface MonsterAttack {
+  name: string;
+  count?: number;
+  bonus: number;
+  damage: string;
+  range?: "Close" | "Near" | "Far";
+  notes?: string;
+}
+
+export interface MonsterSummary {
+  id: string;
+  name: string;
+  level: number;
+  alignment: "Lawful" | "Neutral" | "Chaotic";
+  ac: number;
+  hp: number;
+  movement: string;
+  attacks: MonsterAttack[];
+  modifiers: { str: number; dex: number; con: number; int: number; wis: number; cha: number };
+  darkAdapted: boolean;
+  features: string[];
+}
+
+export interface GeneratedMonster {
+  name: string;
+  level: number;
+  ac: number;
+  hp: number;
+  attackBonus: number;
+  damageFormula: string;
+  attacksCount: number;
+  movement: string;
+  quality: string;
+  strength: string;
+  weakness: string;
+  mutations: string[];
+  treasureLevelAdjustment: number;
+  alignment: "Lawful" | "Neutral" | "Chaotic";
+  dexModifier: number;
+  darkAdapted: boolean;
+}
+
+export function listMonsters(params?: {
+  search?: string;
+  level?: number;
+  alignment?: string;
+}): Promise<{ monsters: MonsterSummary[] }> {
+  const query = new URLSearchParams();
+  if (params?.search) query.set("search", params.search);
+  if (params?.level !== undefined) query.set("level", String(params.level));
+  if (params?.alignment) query.set("alignment", params.alignment);
+  const qStr = query.toString();
+  return request("GET", `/monsters${qStr ? `?${qStr}` : ""}`);
+}
+
+export function getMonster(id: string): Promise<{ monster: MonsterSummary }> {
+  return request("GET", `/monsters/${id}`);
+}
+
+export function getMonsterRoles(): Promise<{ roles: Record<string, any> }> {
+  return request("GET", "/monsters/roles");
+}
+
+export function generateMonster(params: {
+  partyLevel: number;
+  rollCombat?: number;
+  rollQuality?: number;
+  rollStrength?: number;
+  rollWeakness?: number;
+  mutationRolls?: Array<{ table: 1 | 2 | 3; roll: number }>;
+}): Promise<{ monster: GeneratedMonster }> {
+  return request("POST", "/monsters/generate", params);
+}
+
+
 
 

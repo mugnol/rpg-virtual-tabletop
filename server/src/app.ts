@@ -7,6 +7,7 @@ import { apiNotFound, errorHandler } from "./middleware/errors.js";
 import { authRouter } from "./modules/auth/routes.js";
 import { campaignsRouter } from "./modules/campaigns/routes.js";
 import { mapsRouter, tokensRouter } from "./modules/maps/routes.js";
+import { monstersRouter } from "./modules/monsters/routes.js";
 import { sessionsRouter } from "./modules/sessions/routes.js";
 import { sheetsRouter } from "./modules/sheets/routes.js";
 import { systemsRouter } from "./modules/systems/routes.js";
@@ -27,6 +28,7 @@ export function createApp(): express.Express {
   app.use("/api/campaigns", campaignsRouter);
   app.use("/api/systems", systemsRouter);
   app.use("/api/sheets", sheetsRouter);
+  app.use("/api/monsters", monstersRouter);
   app.use("/api/sessions", sessionsRouter);
   app.use("/api/maps", mapsRouter);
   app.use("/api/tokens", tokensRouter);

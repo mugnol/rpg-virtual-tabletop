@@ -183,6 +183,18 @@ export interface FormattedCombatState {
 - `POST /api/maps/:mapId/combat/attack` (GM or active player)
   - Executes attack from active token to target token; returns combat result.
 - `POST /api/maps/:mapId/combat/end` (GM only)
+
+### 2.4 Monster Compendium & Generator Endpoints
+- `GET /api/monsters`
+  - Query parameters: `search` (name substring), `level` (numeric integer), `alignment` (`L` / `N` / `C` / `Lawful` / `Neutral` / `Chaotic`), `system` (defaults to `shadowdark`).
+  - Returns array of monster summaries: `[{ id, name, level, alignment, ac, hp, movement, attacks, features, dexModifier, darkAdapted }]`.
+- `GET /api/monsters/:id`
+  - Returns complete monster definition by ID or slug key.
+- `GET /api/monsters/roles`
+  - Returns official Shadowdark Combat Role presets (`Mook`, `Soldier`, `Striker`, `Tank`, `Controller`, `Legendary`) and baseline stat computation formulas.
+- `POST /api/monsters/generate`
+  - Accepts `{ partyLevel: number, rollCombat?: number, rollQuality?: number, rollStrength?: number, rollWeakness?: number, mutationRolls?: number[] }`.
+  - Implements procedural d20 generation and optional d12 mutations table, returning a complete generated monster stat block.
   - Terminates combat and clears turn queue and timers.
 
 ---
@@ -300,6 +312,18 @@ Clients connected to `/ws/sessions/:id` exchange map and combat messages:
 | Token HP Bar / Label | `token-hp` | Displays `hpCurrent / hpMax` |
 | Add Token Button (GM) | `token-add-button` | Opens token placement form |
 | Token Type Select | `token-type-select` | Option: `CHARACTER`, `MONSTER`, `ITEM` |
+| Monster Mode Select / Tabs | `monster-mode-select` | Mode: `compendium`, `generic`, `procedural`, `custom` |
+| Monster Compendium Search Input | `monster-compendium-search` | Search box for monster catalog |
+| Monster Compendium Filter Level | `monster-compendium-filter-level` | Filter monsters by level |
+| Monster Compendium Filter Alignment | `monster-compendium-filter-alignment` | Filter monsters by alignment |
+| Monster Compendium Select | `monster-compendium-select` | Dropdown to select monster from compendium |
+| Monster Combat Role Select | `monster-role-select` | Role: `Mook`, `Soldier`, `Striker`, `Tank`, `Controller`, `Legendary` |
+| Monster Level Input | `monster-level-input` | Monster level for scaling roles or generic |
+| Monster Party Level Input | `monster-party-level-input` | Average party level (PL) for procedural generator |
+| Monster Generator Button | `monster-generate-button` | Triggers procedural monster generator |
+| Monster Mutation 1 Input | `monster-mutation-1` | Procedural or custom mutation 1 |
+| Monster Mutation 2 Input | `monster-mutation-2` | Procedural or custom mutation 2 |
+| Monster Mutation 3 Input | `monster-mutation-3` | Procedural or custom mutation 3 |
 | Token Sheet Select | `token-sheet-select` | Select PC sheet to link |
 | Token Name Input | `token-name-input` | Custom token name |
 | Token HP Input | `token-hp-input` | Monster / custom HP |
